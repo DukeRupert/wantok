@@ -9,6 +9,9 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+
+	"github.com/dukerupert/wantok/internal/database"
+	_ "modernc.org/sqlite" // Import the modernc.org/sqlite driver
 )
 
 type AppConfig struct {
@@ -31,7 +34,7 @@ func getenv(target string, list []string) string {
 func loadConfig(args []string) AppConfig {
 	// defaults
 	cfg := AppConfig{
-		DatabasePath:  "",
+		DatabasePath:  "wantok.db",
 		ListenAddr:    ":8080",
 		SessionSecret: "PaxRomana",
 		SessionMaxAge: 3600,
@@ -68,8 +71,13 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 	cfg := loadConfig(args)
-	fmt.Printf("database path: %s, session secret: %s, port: %s, maxAge: %d", cfg.DatabasePath, cfg.SessionSecret, cfg.ListenAddr, cfg.SessionMaxAge)
-	return errors.New("All done here")
+	_, err := database.New(cfg.DatabasePath)
+	if err != nil {
+		return err
+	}
+	slog.Info("database connection established")
+	err = errors.New("All done here")
+	return err
 }
 
 func main() {

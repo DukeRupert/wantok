@@ -10,11 +10,11 @@ A consolidated checklist for tracking implementation progress. Check items off a
 - [x] Dependencies added to go.mod
 
 ### Database
-- [ ] SQLite connection working
-- [ ] WAL mode enabled
-- [ ] Migrations system working
-- [ ] Users table created
-- [ ] Sessions table created
+- [x] SQLite connection working
+- [x] WAL mode enabled
+- [x] Migrations system working
+- [x] Users table created
+- [x] Sessions table created
 
 ### Auth Logic
 - [ ] Password hashing (bcrypt)
