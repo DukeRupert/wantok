@@ -6,17 +6,22 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
+	"time"
 
 	"github.com/dukerupert/wantok/internal/database"
+	"github.com/dukerupert/wantok/internal/handlers"
 	"github.com/dukerupert/wantok/internal/store"
-	_ "modernc.org/sqlite" // Import the modernc.org/sqlite driver
+	_ "modernc.org/sqlite"
 )
 
 type AppConfig struct {
 	DatabasePath  string
+	Host          string
 	ListenAddr    string
 	SessionSecret string
 	SessionMaxAge int
@@ -36,7 +41,8 @@ func loadConfig(args []string) AppConfig {
 	// defaults
 	cfg := AppConfig{
 		DatabasePath:  "wantok.db",
-		ListenAddr:    ":8080",
+		Host:          "localhost",
+		ListenAddr:    "8080",
 		SessionSecret: "PaxRomana",
 		SessionMaxAge: 3600,
 	}
@@ -78,9 +84,37 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	}
 	slog.Info("database connection established")
 	queries := store.New(db)
-	
-	err = errors.New("All done here")
-	return err
+
+	srv := handlers.NewServer(queries)
+	httpServer := &http.Server{
+		Addr:    net.JoinHostPort(cfg.Host, cfg.ListenAddr),
+		Handler: srv,
+	}
+
+	errChan := make(chan error, 1)
+	go func() {
+		slog.Info("server started", "addr", httpServer.Addr)
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errChan <- err
+		}
+		close(errChan)
+	}()
+
+	select {
+	case err := <-errChan:
+		return fmt.Errorf("server error: %w", err)
+	case <-ctx.Done():
+		slog.Info("shutting down server")
+	}
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer shutdownCancel()
+
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("shutdown error: %w", err)
+	}
+
+	return nil
 }
 
 func main() {
