@@ -5,9 +5,9 @@ A consolidated checklist for tracking implementation progress. Check items off a
 ## Phase 1: Auth Foundation
 
 ### Setup
-- [ ] Go module initialised
-- [ ] Directory structure created
-- [ ] Dependencies added to go.mod
+- [x] Go module initialised
+- [x] Directory structure created
+- [x] Dependencies added to go.mod
 
 ### Database
 - [ ] SQLite connection working
