@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/dukerupert/wantok/internal/database"
+	"github.com/dukerupert/wantok/internal/store"
 	_ "modernc.org/sqlite" // Import the modernc.org/sqlite driver
 )
 
@@ -71,11 +72,13 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 	cfg := loadConfig(args)
-	_, err := database.New(cfg.DatabasePath)
+	db, err := database.New(cfg.DatabasePath)
 	if err != nil {
 		return err
 	}
 	slog.Info("database connection established")
+	queries := store.New(db)
+	
 	err = errors.New("All done here")
 	return err
 }
