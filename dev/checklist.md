@@ -25,9 +25,9 @@ A consolidated checklist for tracking implementation progress. Check items off a
 - [x] Session deletion
 
 ### Middleware
-- [ ] RequireAuth middleware
-- [ ] RequireAdmin middleware
-- [ ] GetUser context helper
+- [x] RequireAuth middleware
+- [x] RequireAdmin middleware
+- [x] GetUser context helper
 
 ### Handlers & UI
 - [ ] GET /login renders form
