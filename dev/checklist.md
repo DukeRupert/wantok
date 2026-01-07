@@ -17,12 +17,12 @@ A consolidated checklist for tracking implementation progress. Check items off a
 - [x] Sessions table created
 
 ### Auth Logic
-- [ ] Password hashing (bcrypt)
-- [ ] Password verification
-- [ ] Session token generation
-- [ ] Session creation
-- [ ] Session validation
-- [ ] Session deletion
+- [x] Password hashing (bcrypt)
+- [x] Password verification
+- [x] Session token generation
+- [x] Session creation
+- [x] Session validation
+- [x] Session deletion
 
 ### Middleware
 - [ ] RequireAuth middleware
