@@ -33,7 +33,7 @@ func HandleLoginPage(queries *store.Queries, renderer *render.Renderer) http.Han
 		}
 		// Render login template
 		if err := renderer.Render(w, "login", LoginPageData{}); err != nil {
-			slog.Error("failed to render login page", "error", err)
+			slog.Error("failed to render login page", "type", "request", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}
 	}
@@ -47,7 +47,7 @@ func HandleLogin(queries *store.Queries, renderer *render.Renderer) http.Handler
 		ctx := r.Context()
 		// Parse form to get username and password
 		if err := r.ParseForm(); err != nil {
-			slog.Error("ParseForm() error", "error", err)
+			slog.Error("ParseForm() error", "type", "request", "error", err)
 			http.Error(w, "Error parsing form", http.StatusBadRequest)
 			return
 		}
@@ -57,7 +57,7 @@ func HandleLogin(queries *store.Queries, renderer *render.Renderer) http.Handler
 		user, err := queries.GetUserByUsername(ctx, username)
 		// If not found, re-render login with error (don't reveal user doesn't exist)
 		if err != nil {
-			slog.Error("GetUserByUsername() error", "error", err)
+			slog.Error("GetUserByUsername() error", "type", "request", "error", err)
 			w.WriteHeader(http.StatusUnauthorized)
 			renderer.Render(w, "login", LoginPageData{Error: "Invalid username or password"})
 			return
@@ -66,7 +66,7 @@ func HandleLogin(queries *store.Queries, renderer *render.Renderer) http.Handler
 		isValid := auth.CheckPassword(user.PasswordHash, password)
 		// If password wrong, re-render login with error
 		if !isValid {
-			slog.Info("Invalid password")
+			slog.Info("Invalid password", "type", "request")
 			w.WriteHeader(http.StatusUnauthorized)
 			renderer.Render(w, "login", LoginPageData{Error: "Invalid username or password"})
 			return
@@ -74,12 +74,12 @@ func HandleLogin(queries *store.Queries, renderer *render.Renderer) http.Handler
 		// Create session
 		token, err := auth.CreateSession(ctx, queries, user.ID)
 		if err != nil {
-			slog.Error("failed to create session", "error", err)
+			slog.Error("failed to create session", "type", "request", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
 		setSessionCookie(w, token)
-		slog.Info("user logged in", "username", user.Username, "user_id", user.ID)
+		slog.Info("user logged in", "type", "request", "username", user.Username, "user_id", user.ID)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}
 }
@@ -121,7 +121,7 @@ func HandleLogout(queries *store.Queries) http.HandlerFunc {
 		// TODO: Get session token from sessionCookie
 		sessionCookie, err := r.Cookie(sessionCookieName)
 		if err != nil {
-			slog.Info("no cookie found", "error", err)
+			slog.Info("no cookie found", "type", "request", "error", err)
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
@@ -129,7 +129,7 @@ func HandleLogout(queries *store.Queries) http.HandlerFunc {
 		token := sessionCookie.Value
 		err = auth.DeleteSession(ctx, queries, token)
 		if err != nil {
-			slog.Error("failed to delete session from database", "error", err)
+			slog.Error("failed to delete session from database", "type", "request", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}

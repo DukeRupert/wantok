@@ -36,11 +36,11 @@ func RequireAuth(queries *store.Queries) func(http.Handler) http.Handler {
 			// If missing, redirect to /login
 			if err != nil {
 				if err == http.ErrNoCookie {
-					slog.Info("session cookie not found. redirect to /login")
+					slog.Info("session cookie not found. redirect to /login", "type", "request")
 					http.Redirect(w, r, "/login", http.StatusSeeOther)
 					return
 				}
-				slog.Error("failed to read session cookie", "error", err)
+				slog.Error("failed to read session cookie", "type", "request", "error", err)
 				http.Error(w, "Internal server error", http.StatusInternalServerError)
 				return
 			}
@@ -48,7 +48,7 @@ func RequireAuth(queries *store.Queries) func(http.Handler) http.Handler {
 			row, err := ValidateSession(ctx, queries, token.Value)
 			// If invalid/expired, clear cookie and redirect to /login
 			if err != nil {
-				slog.Info("invalid session cookie", "error", err)
+				slog.Info("invalid session cookie", "type", "request", "error", err)
 				clearSessionCookie(w)
 				http.Redirect(w, r, "/login", http.StatusSeeOther)
 				return

@@ -73,7 +73,7 @@ func loadConfig(args []string) AppConfig {
 	if maxAge != "" {
 		i, err := strconv.Atoi(maxAge)
 		if err != nil {
-			slog.Info("Invalid session max age", "error", err)
+			slog.Info("Invalid session max age", "type", "lifecycle", "error", err)
 			i = 3600
 		}
 		cfg.SessionMaxAge = i
@@ -88,7 +88,7 @@ func createAdmin(cfg AppConfig) error {
 	if err != nil {
 		return err
 	}
-	slog.Info("database connection established")
+	slog.Info("database connection established", "type", "lifecycle")
 	queries := store.New(db)
 
 	username, err := promptString("username: ")
@@ -156,14 +156,14 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	if err != nil {
 		return err
 	}
-	slog.Info("database connection established")
+	slog.Info("database connection established", "type", "lifecycle")
 	queries := store.New(db)
 
 	renderer, err := render.New()
 	if err != nil {
 		return fmt.Errorf("failed to create renderer: %w", err)
 	}
-	slog.Info("template renderer initialized")
+	slog.Info("template renderer initialized", "type", "lifecycle")
 
 	srv := handlers.NewServer(queries, renderer)
 	httpServer := &http.Server{
@@ -173,7 +173,7 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 
 	errChan := make(chan error, 1)
 	go func() {
-		slog.Info("server started", "addr", httpServer.Addr)
+		slog.Info("server started", "type", "lifecycle", "addr", httpServer.Addr)
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errChan <- err
 		}
@@ -184,7 +184,7 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	case err := <-errChan:
 		return fmt.Errorf("server error: %w", err)
 	case <-ctx.Done():
-		slog.Info("shutting down server")
+		slog.Info("shutting down server", "type", "lifecycle")
 	}
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
