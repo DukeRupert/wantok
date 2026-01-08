@@ -11,15 +11,20 @@ import (
 func NewServer(queries *store.Queries, renderer *render.Renderer) http.Handler {
 	mux := http.NewServeMux()
 
-	// Auth routes
+	// Auth routes (public)
 	mux.HandleFunc("GET /login", HandleLoginPage(queries, renderer))
 	mux.HandleFunc("POST /auth/login", HandleLogin(queries, renderer))
 	mux.HandleFunc("POST /auth/logout", HandleLogout(queries))
 
-	// Protected routes
+	// Protected routes (require auth)
 	mux.Handle("GET /", auth.RequireAuth(queries)(HandleHome()))
+	mux.Handle("GET /users", auth.RequireAuth(queries)(HandleListUsers(queries)))
 
-	// TODO: Admin routes (wrap with auth.RequireAdmin)
+	// Admin routes (require auth + admin)
+	mux.Handle("GET /admin", auth.RequireAuth(queries)(auth.RequireAdmin(HandleAdminPage(queries, renderer))))
+	mux.Handle("POST /admin/users", auth.RequireAuth(queries)(auth.RequireAdmin(HandleCreateUser(queries, renderer))))
+	mux.Handle("POST /admin/users/{id}", auth.RequireAuth(queries)(auth.RequireAdmin(HandleUpdateUser(queries, renderer))))
+	mux.Handle("POST /admin/users/{id}/delete", auth.RequireAuth(queries)(auth.RequireAdmin(HandleDeleteUser(queries))))
 
 	return mux
 }

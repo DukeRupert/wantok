@@ -25,11 +25,11 @@ func HandleLoginPage(queries *store.Queries, renderer *render.Renderer) http.Han
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		// Check if user is already authenticated
-		user := auth.GetUser(ctx)
-		// If authenticated, redirect to /
-		if user != nil {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
-			return
+		if token, err := r.Cookie(sessionCookieName); err == nil {
+			if row, err := auth.ValidateSession(ctx, queries, token.Value); err == nil && row != nil {
+				http.Redirect(w, r, "/", http.StatusSeeOther)
+				return
+			}
 		}
 		// Render login template
 		if err := renderer.Render(w, "login", LoginPageData{}); err != nil {
