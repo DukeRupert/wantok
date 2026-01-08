@@ -15,6 +15,7 @@ import (
 
 	"github.com/dukerupert/wantok/internal/database"
 	"github.com/dukerupert/wantok/internal/handlers"
+	"github.com/dukerupert/wantok/internal/render"
 	"github.com/dukerupert/wantok/internal/store"
 	_ "modernc.org/sqlite"
 )
@@ -85,7 +86,13 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	slog.Info("database connection established")
 	queries := store.New(db)
 
-	srv := handlers.NewServer(queries)
+	renderer, err := render.New()
+	if err != nil {
+		return fmt.Errorf("failed to create renderer: %w", err)
+	}
+	slog.Info("template renderer initialized")
+
+	srv := handlers.NewServer(queries, renderer)
 	httpServer := &http.Server{
 		Addr:    net.JoinHostPort(cfg.Host, cfg.ListenAddr),
 		Handler: srv,
