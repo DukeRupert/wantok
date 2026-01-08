@@ -79,7 +79,38 @@ func HandleLogin(queries *store.Queries, renderer *render.Renderer) http.Handler
 			return
 		}
 		setSessionCookie(w, token)
+		slog.Info("user logged in", "username", user.Username, "user_id", user.ID)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
+	}
+}
+
+// HandleHome renders the home page for authenticated users.
+func HandleHome() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user := auth.GetUser(r.Context())
+		if user == nil {
+			w.Write([]byte("Welcome to Wantok"))
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		html := `<!DOCTYPE html>
+<html>
+<head>
+	<title>Wantok</title>
+	<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+	<div class="text-center">
+		<h1 class="text-2xl font-bold text-gray-800 mb-4">Welcome, ` + user.DisplayName + `</h1>
+		<form action="/auth/logout" method="POST">
+			<button type="submit" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md transition duration-200">
+				Logout
+			</button>
+		</form>
+	</div>
+</body>
+</html>`
+		w.Write([]byte(html))
 	}
 }
 
