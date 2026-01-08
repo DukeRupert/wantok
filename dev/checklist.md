@@ -52,9 +52,9 @@ A consolidated checklist for tracking implementation progress. Check items off a
 ## Phase 2: User Management
 
 ### Admin CLI
-- [ ] `--create-admin` flag implemented
-- [ ] Prompts for credentials
-- [ ] Creates admin user in database
+- [x] `--create-admin` flag implemented
+- [x] Prompts for credentials
+- [x] Creates admin user in database
 
 ### Admin Handlers
 - [ ] GET /admin lists users
