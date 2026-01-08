@@ -30,9 +30,9 @@ A consolidated checklist for tracking implementation progress. Check items off a
 - [x] GetUser context helper
 
 ### Handlers & UI
-- [ ] GET /login renders form
-- [ ] POST /auth/login processes login
-- [ ] POST /auth/logout clears session
+- [x] GET /login renders form
+- [x] POST /auth/login processes login
+- [x] POST /auth/logout clears session
 - [ ] Login template styled
 
 ### Phase 1 Verification

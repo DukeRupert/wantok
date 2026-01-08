@@ -3,7 +3,6 @@ package handlers
 import (
 	"log/slog"
 	"net/http"
-	"time"
 
 	"github.com/dukerupert/wantok/internal/auth"
 	"github.com/dukerupert/wantok/internal/store"
@@ -19,9 +18,9 @@ const (
 func HandleLoginPage(queries *store.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		// TODO: Check if user is already authenticated via auth.GetUser
+		// Check if user is already authenticated
 		user := auth.GetUser(ctx)
-		// TODO: If authenticated, redirect to /
+		// If authenticated, redirect to /
 		if user != nil {
 			http.Redirect(w, r, "/", http.StatusSeeOther)
 			return
@@ -37,7 +36,7 @@ func HandleLoginPage(queries *store.Queries) http.HandlerFunc {
 func HandleLogin(queries *store.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		// TODO: Parse form to get username and password
+		// Parse form to get username and password
 		if err := r.ParseForm(); err != nil {
 			slog.Error("ParseForm() error", "error", err)
 			http.Error(w, "Error parsing form", http.StatusBadRequest)
@@ -45,41 +44,30 @@ func HandleLogin(queries *store.Queries) http.HandlerFunc {
 		}
 		username := r.FormValue("username")
 		password := r.FormValue("password")
-		// TODO: Look up user by username using queries.GetUserByUsername
+		// Look up user by username
 		user, err := queries.GetUserByUsername(ctx, username)
-		// TODO: If not found, re-render login with error (don't reveal user doesn't exist)
+		// If not found, re-render login with error (don't reveal user doesn't exist)
 		if err != nil {
 			slog.Error("GetUserByUsername() error", "error", err)
 			http.Error(w, "Invalid username or password", http.StatusUnauthorized)
 			return
 		}
-		// TODO: Check password using auth.CheckPassword
+		// Check password
 		isValid := auth.CheckPassword(user.PasswordHash, password)
-		// TODO: If password wrong, re-render login with error
+		// If password wrong, re-render login with error
 		if !isValid {
 			slog.Info("Invalid password")
 			http.Error(w, "Invalid username or password", http.StatusUnauthorized)
 			return
 		}
-		// TODO: Create session using auth.CreateSession
+		// Create session
 		token, err := auth.CreateSession(ctx, queries, user.ID)
 		if err != nil {
 			slog.Error("failed to create session", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 			return
 		}
-		// TODO: Set cookie with token (Name: sessionCookieName, HttpOnly, SameSite=Lax, Path=/, MaxAge=sessionMaxAge)
-		cookie := http.Cookie{
-			Name: sessionCookieName,
-			Value: token,
-			Path: "/",
-			MaxAge: sessionMaxAge,
-			HttpOnly: true,
-			Secure: true,
-			SameSite: http.SameSiteLaxMode,
-		}
-		http.SetCookie(w, &cookie)
-		// TODO: Redirect to /
+		setSessionCookie(w, token)
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}
 }
@@ -87,27 +75,51 @@ func HandleLogin(queries *store.Queries) http.HandlerFunc {
 // HandleLogout clears the session and redirects to login.
 func HandleLogout(queries *store.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Get session token from cookie
+		ctx := r.Context()
+		// TODO: Get session token from sessionCookie
+		sessionCookie, err := r.Cookie(sessionCookieName)
+		if err != nil {
+			slog.Info("no cookie found", "error", err)
+			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
 		// TODO: Delete session from database using auth.DeleteSession
-		// TODO: Clear cookie (set MaxAge -1)
-		// TODO: Redirect to /login
+		token := sessionCookie.Value
+		err = auth.DeleteSession(ctx, queries, token)
+		if err != nil {
+			slog.Error("failed to delete session from database", "error", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+		clearSessionCookie(w)
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	}
 }
 
 // setSessionCookie sets the session cookie with secure defaults.
 func setSessionCookie(w http.ResponseWriter, token string) {
-	// TODO: Create http.Cookie with:
-	//   - Name: sessionCookieName
-	//   - Value: token
-	//   - Path: /
-	//   - MaxAge: sessionMaxAge
-	//   - HttpOnly: true
-	//   - SameSite: http.SameSiteLaxMode
-	// TODO: Call http.SetCookie
+	cookie := &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   sessionMaxAge,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	}
+	http.SetCookie(w, cookie)
 }
 
 // clearSessionCookie removes the session cookie from the browser.
 func clearSessionCookie(w http.ResponseWriter) {
-	// TODO: Create http.Cookie with empty value and MaxAge -1
-	// TODO: Call http.SetCookie
+	cookie := &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	}
+	http.SetCookie(w, cookie)
 }
