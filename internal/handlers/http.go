@@ -17,8 +17,13 @@ func NewServer(queries *store.Queries, renderer *render.Renderer) http.Handler {
 	mux.HandleFunc("POST /auth/logout", HandleLogout(queries))
 
 	// Protected routes (require auth)
-	mux.Handle("GET /", auth.RequireAuth(queries)(HandleHome()))
+	mux.Handle("GET /", auth.RequireAuth(queries)(HandleChatPage(queries, renderer)))
 	mux.Handle("GET /users", auth.RequireAuth(queries)(HandleListUsers(queries)))
+
+	// Messaging routes (require auth)
+	mux.Handle("GET /conversations", auth.RequireAuth(queries)(HandleGetConversations(queries)))
+	mux.Handle("GET /conversations/{userID}/messages", auth.RequireAuth(queries)(HandleGetMessages(queries)))
+	mux.Handle("POST /conversations/{userID}/messages", auth.RequireAuth(queries)(HandleSendMessage(queries)))
 
 	// Admin routes (require auth + admin)
 	mux.Handle("GET /admin", auth.RequireAuth(queries)(auth.RequireAdmin(HandleAdminPage(queries, renderer))))

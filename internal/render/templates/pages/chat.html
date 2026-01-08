@@ -1,0 +1,113 @@
+{{define "chat"}}
+{{template "base" .}}
+{{end}}
+
+{{define "title"}}Wantok{{end}}
+
+{{define "content"}}
+<!--
+Chat Page Layout Notes:
+- Two-column layout: sidebar (conversations) + main area (messages)
+- Mobile: sidebar hidden, show conversation list or messages (not both)
+- Use Alpine.js for local state (selected conversation, new message input)
+- Use HTMX for loading messages and sending
+
+Structure:
+1. Header bar with current user name + logout + admin link (if admin)
+2. Sidebar:
+   - "New Conversation" button (opens user picker modal)
+   - List of conversations (other user's name + last message preview)
+   - Click to load conversation
+3. Main area:
+   - Header showing conversation partner's name
+   - Messages container (scrollable, flex-col-reverse for newest at bottom)
+   - Message input form at bottom
+
+HTMX patterns:
+- GET /conversations -> updates sidebar list
+- GET /conversations/{userID}/messages -> loads messages into main area
+- POST /conversations/{userID}/messages -> sends message, returns new message HTML
+
+Polling (temporary until Phase 4 WebSocket):
+- hx-trigger="every 5s" on messages container for active conversation
+- hx-trigger="every 10s" on sidebar for new conversations
+
+CSS considerations:
+- Messages from self: right-aligned, emerald background
+- Messages from other: left-aligned, gray background
+- Timestamps in small text below each message
+-->
+
+<div class="h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-white border-b px-4 py-3 flex justify-between items-center">
+        <h1 class="text-xl font-bold text-gray-800">Wantok</h1>
+        <div class="flex items-center gap-4">
+            <span class="text-gray-600">{{.CurrentUserName}}</span>
+            {{/* TODO: Show admin link if user is admin */}}
+            <a href="/admin" class="text-emerald-600 hover:text-emerald-700">Admin</a>
+            <form action="/auth/logout" method="POST" class="inline">
+                <button type="submit" class="text-gray-500 hover:text-gray-700">Logout</button>
+            </form>
+        </div>
+    </header>
+
+    <div class="flex-1 flex overflow-hidden">
+        <!-- Sidebar -->
+        <aside class="w-80 bg-gray-50 border-r flex flex-col">
+            <!-- New Conversation Button -->
+            <div class="p-4 border-b">
+                <button class="w-full py-2 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md">
+                    New Conversation
+                </button>
+            </div>
+
+            <!-- Conversation List -->
+            <div class="flex-1 overflow-y-auto">
+                {{/* TODO: Loop through .Conversations */}}
+                {{/* Each item: link to /?user={userID}, show DisplayName + LastMessage preview */}}
+                <p class="p-4 text-gray-500 text-sm">No conversations yet</p>
+            </div>
+        </aside>
+
+        <!-- Main Chat Area -->
+        <main class="flex-1 flex flex-col">
+            {{if .ActiveUserID}}
+            <!-- Conversation Header -->
+            <div class="bg-white border-b px-4 py-3">
+                <h2 class="font-semibold text-gray-800">{{.ActiveUserName}}</h2>
+            </div>
+
+            <!-- Messages -->
+            <div class="flex-1 overflow-y-auto p-4 flex flex-col-reverse">
+                {{/* TODO: Loop through .Messages */}}
+                {{/* Use flex-col-reverse so newest messages appear at bottom */}}
+                {{/* Style: IsSent ? right-aligned emerald : left-aligned gray */}}
+            </div>
+
+            <!-- Message Input -->
+            <form class="bg-white border-t p-4 flex gap-2">
+                <input
+                    type="text"
+                    name="content"
+                    placeholder="Type a message..."
+                    class="flex-1 px-4 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    autocomplete="off"
+                >
+                <button
+                    type="submit"
+                    class="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-md"
+                >
+                    Send
+                </button>
+            </form>
+            {{else}}
+            <!-- No Conversation Selected -->
+            <div class="flex-1 flex items-center justify-center text-gray-500">
+                <p>Select a conversation or start a new one</p>
+            </div>
+            {{end}}
+        </main>
+    </div>
+</div>
+{{end}}
