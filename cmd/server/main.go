@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/dukerupert/wantok/internal/auth"
+	"github.com/dukerupert/wantok/internal/cleanup"
 	"github.com/dukerupert/wantok/internal/database"
 	"github.com/dukerupert/wantok/internal/handlers"
 	"github.com/dukerupert/wantok/internal/realtime"
@@ -169,6 +170,11 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	// Create and start WebSocket hub
 	hub := realtime.NewHub()
 	go hub.Run()
+
+	// Start cleanup service (runs every hour)
+	cleaner := cleanup.New(queries, time.Hour)
+	cleaner.Start()
+	defer cleaner.Stop()
 
 	srv := handlers.NewServer(queries, renderer, hub)
 	httpServer := &http.Server{
