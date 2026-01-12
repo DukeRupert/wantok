@@ -51,76 +51,60 @@ func NewClient(hub *Hub, conn *websocket.Conn, userID int64, displayName string)
 
 // ReadPump pumps messages from the websocket connection to the hub.
 // Runs in a dedicated goroutine for each client.
-//
-// Implementation notes:
-//   - Set read deadline and pong handler for keepalive
-//   - Read messages in a loop
-//   - For now, we don't process incoming messages (send-only)
-//   - On error or close, unregister client and close connection
-//   - Future: could handle typing indicators, read receipts, etc.
 func (c *Client) ReadPump() {
-	// TODO: Implement
-	// defer func() {
-	//     c.hub.Unregister(c)
-	//     c.conn.Close()
-	// }()
-	//
-	// c.conn.SetReadLimit(maxMessageSize)
-	// c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	// c.conn.SetPongHandler(func(string) error {
-	//     c.conn.SetReadDeadline(time.Now().Add(pongWait))
-	//     return nil
-	// })
-	//
-	// for {
-	//     _, _, err := c.conn.ReadMessage()
-	//     if err != nil {
-	//         // Connection closed or error
-	//         break
-	//     }
-	//     // Future: process incoming message (typing, read receipt, etc.)
-	// }
+	defer func() {
+		c.hub.Unregister(c)
+		c.conn.Close()
+	}()
+
+	c.conn.SetReadLimit(maxMessageSize)
+	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.conn.SetPongHandler(func(string) error {
+		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		return nil
+	})
+
+	for {
+		_, _, err := c.conn.ReadMessage()
+		if err != nil {
+			// Connection closed or error - exit loop
+			break
+		}
+		// Future: process incoming message (typing, read receipt, etc.)
+	}
 }
 
 // WritePump pumps messages from the hub to the websocket connection.
 // Runs in a dedicated goroutine for each client.
-//
-// Implementation notes:
-//   - Use ticker for periodic pings
-//   - Select on send channel and ticker
-//   - For send: write message as JSON, handle write errors
-//   - For ticker: send ping, handle write errors
-//   - On any error, close connection (ReadPump will handle unregister)
 func (c *Client) WritePump() {
-	// TODO: Implement
-	// ticker := time.NewTicker(pingPeriod)
-	// defer func() {
-	//     ticker.Stop()
-	//     c.conn.Close()
-	// }()
-	//
-	// for {
-	//     select {
-	//     case message, ok := <-c.send:
-	//         c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-	//         if !ok {
-	//             // Hub closed the channel
-	//             c.conn.WriteMessage(websocket.CloseMessage, []byte{})
-	//             return
-	//         }
-	//
-	//         err := c.conn.WriteMessage(websocket.TextMessage, message)
-	//         if err != nil {
-	//             return
-	//         }
-	//
-	//     case <-ticker.C:
-	//         c.conn.SetWriteDeadline(time.Now().Add(writeWait))
-	//         if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-	//             return
-	//         }
-	//     }
-	// }
+	ticker := time.NewTicker(pingPeriod)
+	defer func() {
+		ticker.Stop()
+		c.conn.Close()
+	}()
+
+	for {
+		select {
+		case message, ok := <-c.send:
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if !ok {
+				// Hub closed the channel
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			err := c.conn.WriteMessage(websocket.TextMessage, message)
+			if err != nil {
+				return
+			}
+
+		case <-ticker.C:
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
+		}
+	}
 }
 
 // Send queues a message to be sent to this client.

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/dukerupert/wantok/internal/auth"
+	"github.com/dukerupert/wantok/internal/realtime"
 	"github.com/dukerupert/wantok/internal/render"
 	"github.com/dukerupert/wantok/internal/store"
 )
@@ -187,7 +188,7 @@ func HandleGetMessages(queries *store.Queries) http.HandlerFunc {
 }
 
 // HandleSendMessage creates a new message in a conversation.
-func HandleSendMessage(queries *store.Queries) http.HandlerFunc {
+func HandleSendMessage(queries *store.Queries, hub *realtime.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		user := auth.GetUser(ctx)
@@ -238,6 +239,30 @@ func HandleSendMessage(queries *store.Queries) http.HandlerFunc {
 
 		slog.Info("message sent", "type", "request", "from", user.ID, "to", recipientID, "message_id", msg.ID)
 
+		// Broadcast via WebSocket to sender's other devices and recipient
+		wsMsg := &realtime.Message{
+			Type: "message",
+			Payload: MessageItem{
+				ID:         msg.ID,
+				Content:    msg.Content,
+				SenderID:   msg.SenderID,
+				SenderName: user.DisplayName,
+				CreatedAt:  msg.CreatedAt,
+				IsSent:     false, // Will be determined by recipient
+			},
+		}
+		hub.SendToUser(recipientID, wsMsg)
+		// Also send to sender's other devices (mark as sent)
+		wsMsg.Payload = MessageItem{
+			ID:         msg.ID,
+			Content:    msg.Content,
+			SenderID:   msg.SenderID,
+			SenderName: user.DisplayName,
+			CreatedAt:  msg.CreatedAt,
+			IsSent:     true,
+		}
+		hub.SendToUser(user.ID, wsMsg)
+
 		// Check if HTMX request - return HTML fragment
 		if r.Header.Get("HX-Request") == "true" {
 			w.Header().Set("Content-Type", "text/html")
@@ -270,8 +295,7 @@ func HandleSendMessage(queries *store.Queries) http.HandlerFunc {
 			slog.Error("failed to encode message", "type", "request", "error", err)
 		}
 
-		// TODO (Phase 4): Broadcast via WebSocket hub to recipient
-		_ = recipient // Will be used for WebSocket notification
+		_ = recipient // recipient info used above
 	}
 }
 

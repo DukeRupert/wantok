@@ -1,6 +1,7 @@
 package realtime
 
 import (
+	"encoding/json"
 	"log/slog"
 	"sync"
 )
@@ -31,10 +32,10 @@ type Hub struct {
 	mu sync.RWMutex
 }
 
-// UserMessage wraps a message with target user ID.
+// UserMessage wraps a serialized message with target user ID.
 type UserMessage struct {
-	UserID  int64
-	Message *Message
+	UserID int64
+	Data   []byte
 }
 
 // NewHub creates a new Hub instance.
@@ -49,34 +50,48 @@ func NewHub() *Hub {
 
 // Run starts the hub's main loop. Should be called in a goroutine.
 // Handles all client registration, unregistration, and message broadcasting.
-//
-// Implementation notes:
-//   - Use select to handle register, unregister, and broadcast channels
-//   - For register: add client to clients[userID] map
-//   - For unregister: remove client, close send channel, cleanup empty user maps
-//   - For broadcast: send message to all clients for the target user
 func (h *Hub) Run() {
-	// TODO: Implement
-	// for {
-	//     select {
-	//     case client := <-h.register:
-	//         // Add client to clients map
-	//         // Create user's client set if doesn't exist
-	//         // Log connection
-	//
-	//     case client := <-h.unregister:
-	//         // Remove client from clients map
-	//         // Close client's send channel
-	//         // Delete user's map if empty
-	//         // Log disconnection
-	//
-	//     case userMsg := <-h.broadcast:
-	//         // Get all clients for target user
-	//         // Send message to each client's send channel
-	//         // If send blocks (buffer full), unregister client
-	//     }
-	// }
 	slog.Info("hub started", "type", "lifecycle")
+	for {
+		select {
+		case client := <-h.register:
+			h.mu.Lock()
+			if h.clients[client.UserID] == nil {
+				h.clients[client.UserID] = make(map[*Client]bool)
+			}
+			h.clients[client.UserID][client] = true
+			h.mu.Unlock()
+			slog.Info("client connected", "type", "websocket", "user_id", client.UserID, "display_name", client.DisplayName)
+
+		case client := <-h.unregister:
+			h.mu.Lock()
+			if clients, ok := h.clients[client.UserID]; ok {
+				if _, exists := clients[client]; exists {
+					delete(clients, client)
+					client.Close()
+					if len(clients) == 0 {
+						delete(h.clients, client.UserID)
+					}
+				}
+			}
+			h.mu.Unlock()
+			slog.Info("client disconnected", "type", "websocket", "user_id", client.UserID, "display_name", client.DisplayName)
+
+		case userMsg := <-h.broadcast:
+			h.mu.RLock()
+			clients := h.clients[userMsg.UserID]
+			h.mu.RUnlock()
+
+			for client := range clients {
+				if !client.Send(userMsg.Data) {
+					// Buffer full, disconnect client
+					go func(c *Client) {
+						h.unregister <- c
+					}(client)
+				}
+			}
+		}
+	}
 }
 
 // Register adds a client to the hub.
@@ -91,19 +106,19 @@ func (h *Hub) Unregister(client *Client) {
 
 // SendToUser sends a message to all connected clients for a user.
 // Used by message handlers to broadcast new messages.
-//
-// Implementation notes:
-//   - Called from HTTP handlers after message creation
-//   - Should send to both sender (other devices) and recipient
-//   - Non-blocking: if user has no clients, message is dropped
+// Non-blocking: if user has no clients or channel is full, message is dropped.
 func (h *Hub) SendToUser(userID int64, msg *Message) {
-	// TODO: Implement
-	// Send to broadcast channel
-	// select {
-	// case h.broadcast <- &UserMessage{UserID: userID, Message: msg}:
-	// default:
-	//     // Channel full, log warning
-	// }
+	data, err := json.Marshal(msg)
+	if err != nil {
+		slog.Error("failed to marshal message", "type", "websocket", "error", err)
+		return
+	}
+
+	select {
+	case h.broadcast <- &UserMessage{UserID: userID, Data: data}:
+	default:
+		slog.Warn("broadcast channel full, dropping message", "type", "websocket", "user_id", userID)
+	}
 }
 
 // ClientCount returns the number of connected clients for a user.
