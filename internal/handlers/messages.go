@@ -269,7 +269,7 @@ func HandleSendMessage(queries *store.Queries, hub *realtime.Hub) http.HandlerFu
 			w.WriteHeader(http.StatusCreated)
 			// Return message HTML that matches the template structure (escape content for XSS)
 			escapedContent := html.EscapeString(msg.Content)
-			htmlResp := `<div class="flex justify-end">
+			htmlResp := `<div class="flex justify-end" data-message-id="` + strconv.FormatInt(msg.ID, 10) + `">
 				<div class="max-w-xs lg:max-w-md px-4 py-2 rounded-lg bg-emerald-600 text-white">
 					<p>` + escapedContent + `</p>
 					<p class="text-xs mt-1 text-emerald-100">` + msg.CreatedAt + `</p>
