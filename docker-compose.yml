@@ -1,0 +1,39 @@
+services:
+  wantok:
+    image: ${DOCKER_IMAGE:-wantok:latest}
+    container_name: wantok
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - wantok-data:/app/data
+    environment:
+      - DATABASE_PATH=/app/data/wantok.db
+      - PORT=8080
+      - SESSION_SECRET=${SESSION_SECRET:?SESSION_SECRET is required}
+      - SECURE_COOKIES=true
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/login"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: wantok-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - wantok
+
+volumes:
+  wantok-data:
+  caddy-data:
+  caddy-config:

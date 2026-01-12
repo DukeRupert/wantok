@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Development
+*.db
+*.db-shm
+*.db-wal
+dev/
+
+# Documentation
+*.md
+!README.md
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# GitHub
+.github/
+
+# Deployment (not needed in image)
+deploy/
+Caddyfile
+
+# Build artifacts
+wantok
+server
+*.exe
+
+# Test files
+*_test.go

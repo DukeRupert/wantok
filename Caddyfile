@@ -1,0 +1,30 @@
+# Wantok Caddy configuration for Docker deployment
+# Replace {$DOMAIN} with your actual domain or set DOMAIN env var
+
+{$DOMAIN:localhost} {
+    # Reverse proxy to Wantok container
+    reverse_proxy wantok:8080
+
+    # Enable compression
+    encode gzip
+
+    # Security headers
+    header {
+        # Prevent clickjacking
+        X-Frame-Options "DENY"
+        # Prevent MIME type sniffing
+        X-Content-Type-Options "nosniff"
+        # Enable XSS filter
+        X-XSS-Protection "1; mode=block"
+        # Referrer policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+        # Remove server header
+        -Server
+    }
+
+    # Logging
+    log {
+        output stdout
+        format console
+    }
+}
