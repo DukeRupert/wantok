@@ -1,119 +1,321 @@
 package handlers
 
 import (
+	"context"
+	"encoding/json"
+	"html"
+	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
 
+	"github.com/dukerupert/wantok/internal/auth"
 	"github.com/dukerupert/wantok/internal/render"
 	"github.com/dukerupert/wantok/internal/store"
 )
 
 // ConversationListItem represents a conversation in the sidebar.
 type ConversationListItem struct {
-	UserID          int64  // The other user's ID
-	DisplayName     string // The other user's display name
-	LastMessage     string // Preview of the last message
-	LastMessageTime string // Formatted timestamp
-	IsUnread        bool   // TODO: Future enhancement
+	UserID          int64  `json:"user_id"`
+	DisplayName     string `json:"display_name"`
+	LastMessage     string `json:"last_message"`
+	LastMessageTime string `json:"last_message_time"`
 }
 
 // MessageItem represents a single message in a conversation.
 type MessageItem struct {
-	ID          int64
-	Content     string
-	SenderID    int64
-	SenderName  string
-	CreatedAt   string
-	IsSent      bool // true if current user sent this message
+	ID         int64  `json:"id"`
+	Content    string `json:"content"`
+	SenderID   int64  `json:"sender_id"`
+	SenderName string `json:"sender_name"`
+	CreatedAt  string `json:"created_at"`
+	IsSent     bool   `json:"is_sent"`
 }
 
 // ChatPageData holds data for the chat template.
 type ChatPageData struct {
-	Conversations    []ConversationListItem
-	ActiveUserID     int64       // The user we're chatting with (0 if none selected)
-	ActiveUserName   string      // Display name of active conversation
-	Messages         []MessageItem
-	CurrentUserID    int64
-	CurrentUserName  string
+	Conversations   []ConversationListItem
+	ActiveUserID    int64
+	ActiveUserName  string
+	Messages        []MessageItem
+	CurrentUserID   int64
+	CurrentUserName string
+	IsAdmin         bool
 }
 
 // HandleChatPage renders the main chat interface.
-// Route: GET /
-// Notes:
-//   - Fetch conversation list for sidebar using GetRecentMessagePerUser
-//   - Group by other_user_id and take most recent message per user
-//   - If conversationID query param provided, load that conversation's messages
-//   - Otherwise show empty message area with prompt to select conversation
 func HandleChatPage(queries *store.Queries, renderer *render.Renderer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement
-		// 1. Get current user from context
-		// 2. Fetch conversations list (deduplicated by other user)
-		// 3. Check for ?user= query param to load specific conversation
-		// 4. If user param present, fetch messages for that conversation
-		// 5. Render chat template with data
-		http.Error(w, "Not implemented", http.StatusNotImplemented)
+		ctx := r.Context()
+		user := auth.GetUser(ctx)
+
+		// Fetch conversations list
+		conversations := getConversationsList(queries, ctx, user.ID)
+
+		// Check for ?user= query param to load specific conversation
+		data := ChatPageData{
+			Conversations:   conversations,
+			CurrentUserID:   user.ID,
+			CurrentUserName: user.DisplayName,
+			IsAdmin:         user.IsAdmin,
+		}
+
+		userIDParam := r.URL.Query().Get("user")
+		if userIDParam != "" {
+			otherUserID, err := strconv.ParseInt(userIDParam, 10, 64)
+			if err == nil && otherUserID != user.ID {
+				// Load messages for this conversation
+				otherUser, err := queries.GetUserByID(ctx, otherUserID)
+				if err == nil {
+					data.ActiveUserID = otherUserID
+					data.ActiveUserName = otherUser.DisplayName
+
+					// Fetch messages
+					msgs, err := queries.GetConversationMessages(ctx, store.GetConversationMessagesParams{
+						SenderID:      user.ID,
+						RecipientID:   otherUserID,
+						SenderID_2:    otherUserID,
+						RecipientID_2: user.ID,
+						Limit:         50,
+						Offset:        0,
+					})
+					if err == nil {
+						data.Messages = make([]MessageItem, len(msgs))
+						for i, m := range msgs {
+							data.Messages[i] = MessageItem{
+								ID:         m.ID,
+								Content:    m.Content,
+								SenderID:   m.SenderID,
+								SenderName: m.SenderDisplayName,
+								CreatedAt:  m.CreatedAt,
+								IsSent:     m.SenderID == user.ID,
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if err := renderer.Render(w, "chat", data); err != nil {
+			slog.Error("failed to render chat page", "type", "request", "error", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+		}
 	}
 }
 
 // HandleGetConversations returns the conversation list as JSON.
-// Route: GET /conversations
-// Notes:
-//   - Returns list of users the current user has messaged
-//   - Includes last message preview and timestamp
-//   - Ordered by most recent message first
-//   - Used for HTMX partial updates of sidebar
 func HandleGetConversations(queries *store.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement
-		// 1. Get current user from context
-		// 2. Query GetRecentMessagePerUser
-		// 3. Deduplicate by other_user_id, keeping most recent
-		// 4. Return JSON array of ConversationListItem
-		http.Error(w, "Not implemented", http.StatusNotImplemented)
+		ctx := r.Context()
+		user := auth.GetUser(ctx)
+
+		conversations := getConversationsList(queries, ctx, user.ID)
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(conversations); err != nil {
+			slog.Error("failed to encode conversations", "type", "request", "error", err)
+		}
 	}
 }
 
 // HandleGetMessages returns messages for a conversation as JSON.
-// Route: GET /conversations/{userID}/messages
-// Notes:
-//   - userID is the other participant in the conversation
-//   - Supports pagination via ?limit= and ?offset= query params
-//   - Default limit: 50, max limit: 100
-//   - Returns messages in reverse chronological order (newest first)
-//   - Client should reverse for display or use CSS flex-direction
 func HandleGetMessages(queries *store.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement
-		// 1. Get current user from context
-		// 2. Parse userID from path using r.PathValue("userID")
-		// 3. Parse limit/offset from query params (with defaults)
-		// 4. Validate userID exists and is not current user
-		// 5. Query GetConversationMessages
-		// 6. Transform to MessageItem slice (set IsSent based on sender_id)
-		// 7. Return JSON array
-		http.Error(w, "Not implemented", http.StatusNotImplemented)
+		ctx := r.Context()
+		user := auth.GetUser(ctx)
+
+		// Parse userID from path
+		otherUserID, err := strconv.ParseInt(r.PathValue("userID"), 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid user ID", http.StatusBadRequest)
+			return
+		}
+
+		// Prevent messaging self
+		if otherUserID == user.ID {
+			http.Error(w, "Cannot message yourself", http.StatusBadRequest)
+			return
+		}
+
+		// Parse pagination params
+		limit := int64(50)
+		offset := int64(0)
+		if l := r.URL.Query().Get("limit"); l != "" {
+			if parsed, err := strconv.ParseInt(l, 10, 64); err == nil && parsed > 0 && parsed <= 100 {
+				limit = parsed
+			}
+		}
+		if o := r.URL.Query().Get("offset"); o != "" {
+			if parsed, err := strconv.ParseInt(o, 10, 64); err == nil && parsed >= 0 {
+				offset = parsed
+			}
+		}
+
+		// Fetch messages
+		msgs, err := queries.GetConversationMessages(ctx, store.GetConversationMessagesParams{
+			SenderID:      user.ID,
+			RecipientID:   otherUserID,
+			SenderID_2:    otherUserID,
+			RecipientID_2: user.ID,
+			Limit:         limit,
+			Offset:        offset,
+		})
+		if err != nil {
+			slog.Error("failed to get messages", "type", "request", "error", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
+			return
+		}
+
+		// Transform to MessageItem slice
+		messages := make([]MessageItem, len(msgs))
+		for i, m := range msgs {
+			messages[i] = MessageItem{
+				ID:         m.ID,
+				Content:    m.Content,
+				SenderID:   m.SenderID,
+				SenderName: m.SenderDisplayName,
+				CreatedAt:  m.CreatedAt,
+				IsSent:     m.SenderID == user.ID,
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(messages); err != nil {
+			slog.Error("failed to encode messages", "type", "request", "error", err)
+		}
 	}
 }
 
 // HandleSendMessage creates a new message in a conversation.
-// Route: POST /conversations/{userID}/messages
-// Notes:
-//   - userID is the recipient
-//   - Request body: form-encoded with "content" field
-//   - Validates: content not empty, recipient exists, not messaging self
-//   - Returns created message as JSON (for optimistic UI update)
-//   - Phase 4: Will trigger WebSocket broadcast to recipient
 func HandleSendMessage(queries *store.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Implement
-		// 1. Get current user from context
-		// 2. Parse userID from path
-		// 3. Parse form to get content
-		// 4. Validate: content not empty, not self-messaging
-		// 5. Verify recipient exists (GetUserByID)
-		// 6. Create message using CreateMessage query
-		// 7. Return created message as JSON
-		// 8. (Phase 4) Broadcast via WebSocket hub
-		http.Error(w, "Not implemented", http.StatusNotImplemented)
+		ctx := r.Context()
+		user := auth.GetUser(ctx)
+
+		// Parse userID from path
+		recipientID, err := strconv.ParseInt(r.PathValue("userID"), 10, 64)
+		if err != nil {
+			http.Error(w, "Invalid user ID", http.StatusBadRequest)
+			return
+		}
+
+		// Prevent messaging self
+		if recipientID == user.ID {
+			http.Error(w, "Cannot message yourself", http.StatusBadRequest)
+			return
+		}
+
+		// Parse form
+		if err := r.ParseForm(); err != nil {
+			http.Error(w, "Bad request", http.StatusBadRequest)
+			return
+		}
+
+		content := strings.TrimSpace(r.FormValue("content"))
+		if content == "" {
+			http.Error(w, "Message content is required", http.StatusBadRequest)
+			return
+		}
+
+		// Verify recipient exists
+		recipient, err := queries.GetUserByID(ctx, recipientID)
+		if err != nil {
+			http.Error(w, "Recipient not found", http.StatusNotFound)
+			return
+		}
+
+		// Create message
+		msg, err := queries.CreateMessage(ctx, store.CreateMessageParams{
+			SenderID:    user.ID,
+			RecipientID: recipientID,
+			Content:     content,
+		})
+		if err != nil {
+			slog.Error("failed to create message", "type", "request", "error", err)
+			http.Error(w, "Failed to send message", http.StatusInternalServerError)
+			return
+		}
+
+		slog.Info("message sent", "type", "request", "from", user.ID, "to", recipientID, "message_id", msg.ID)
+
+		// Check if HTMX request - return HTML fragment
+		if r.Header.Get("HX-Request") == "true" {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusCreated)
+			// Return message HTML that matches the template structure (escape content for XSS)
+			escapedContent := html.EscapeString(msg.Content)
+			htmlResp := `<div class="flex justify-end">
+				<div class="max-w-xs lg:max-w-md px-4 py-2 rounded-lg bg-emerald-600 text-white">
+					<p>` + escapedContent + `</p>
+					<p class="text-xs mt-1 text-emerald-100">` + msg.CreatedAt + `</p>
+				</div>
+			</div>`
+			w.Write([]byte(htmlResp))
+			return
+		}
+
+		// Return created message as JSON for API clients
+		response := MessageItem{
+			ID:         msg.ID,
+			Content:    msg.Content,
+			SenderID:   msg.SenderID,
+			SenderName: user.DisplayName,
+			CreatedAt:  msg.CreatedAt,
+			IsSent:     true,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			slog.Error("failed to encode message", "type", "request", "error", err)
+		}
+
+		// TODO (Phase 4): Broadcast via WebSocket hub to recipient
+		_ = recipient // Will be used for WebSocket notification
 	}
+}
+
+// getConversationsList fetches and deduplicates conversations for a user.
+func getConversationsList(queries *store.Queries, ctx context.Context, userID int64) []ConversationListItem {
+	rows, err := queries.GetRecentMessagePerUser(ctx, store.GetRecentMessagePerUserParams{
+		SenderID:    userID,
+		SenderID_2:  userID,
+		RecipientID: userID,
+	})
+	if err != nil {
+		slog.Error("failed to get conversations", "type", "request", "error", err)
+		return []ConversationListItem{}
+	}
+
+	// Deduplicate by other user ID, keeping most recent (already sorted by created_at DESC)
+	seen := make(map[int64]bool)
+	var conversations []ConversationListItem
+
+	for _, row := range rows {
+		// Determine the other user's ID
+		otherUserID := row.RecipientID
+		if row.SenderID != userID {
+			otherUserID = row.SenderID
+		}
+
+		if seen[otherUserID] {
+			continue
+		}
+		seen[otherUserID] = true
+
+		// Truncate message preview
+		preview := row.Content
+		if len(preview) > 50 {
+			preview = preview[:47] + "..."
+		}
+
+		conversations = append(conversations, ConversationListItem{
+			UserID:          otherUserID,
+			DisplayName:     row.OtherUserDisplayName,
+			LastMessage:     preview,
+			LastMessageTime: row.CreatedAt,
+		})
+	}
+
+	return conversations
 }
