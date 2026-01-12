@@ -1,0 +1,28 @@
+# Wantok Caddy reverse proxy configuration
+# Replace wantok.example.com with your actual domain
+
+wantok.example.com {
+    # Reverse proxy to Wantok server
+    reverse_proxy localhost:8080
+
+    # Enable compression
+    encode gzip
+
+    # Security headers
+    header {
+        # Prevent clickjacking
+        X-Frame-Options "DENY"
+        # Prevent MIME type sniffing
+        X-Content-Type-Options "nosniff"
+        # Enable XSS filter
+        X-XSS-Protection "1; mode=block"
+        # Referrer policy
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/wantok.log
+        format console
+    }
+}

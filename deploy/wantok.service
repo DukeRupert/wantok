@@ -1,0 +1,28 @@
+[Unit]
+Description=Wantok Family Messaging Server
+After=network.target
+
+[Service]
+Type=simple
+User=wantok
+Group=wantok
+WorkingDirectory=/opt/wantok
+ExecStart=/opt/wantok/wantok
+Restart=on-failure
+RestartSec=5
+
+# Environment variables
+Environment=DATABASE_PATH=/opt/wantok/data/wantok.db
+Environment=PORT=8080
+Environment=SESSION_SECRET=CHANGE_ME_TO_RANDOM_STRING
+Environment=SECURE_COOKIES=true
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/wantok/data
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
