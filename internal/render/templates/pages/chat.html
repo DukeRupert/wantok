@@ -141,51 +141,101 @@
 
 <script>
 // WebSocket connection for real-time messaging
-// TODO: Implement when Phase 4 handlers are complete
-//
-// Implementation notes:
-// - Connect to ws://host/ws on page load
-// - Handle message events to append new messages to chat
-// - Handle reconnection on disconnect with exponential backoff
-// - Update conversation list when new message arrives
-//
-// (function() {
-//     let ws = null;
-//     let reconnectAttempts = 0;
-//     const maxReconnectAttempts = 5;
-//
-//     function connect() {
-//         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-//         ws = new WebSocket(protocol + '//' + window.location.host + '/ws');
-//
-//         ws.onopen = function() {
-//             console.log('WebSocket connected');
-//             reconnectAttempts = 0;
-//         };
-//
-//         ws.onmessage = function(event) {
-//             const data = JSON.parse(event.data);
-//             if (data.type === 'message') {
-//                 // Append message to chat if in correct conversation
-//                 // Update conversation list sidebar
-//             }
-//         };
-//
-//         ws.onclose = function() {
-//             console.log('WebSocket disconnected');
-//             if (reconnectAttempts < maxReconnectAttempts) {
-//                 reconnectAttempts++;
-//                 const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
-//                 setTimeout(connect, delay);
-//             }
-//         };
-//
-//         ws.onerror = function(error) {
-//             console.error('WebSocket error:', error);
-//         };
-//     }
-//
-//     connect();
-// })();
+(function() {
+    const currentUserID = {{.CurrentUserID}};
+    const activeUserID = {{.ActiveUserID}};
+    let ws = null;
+    let reconnectAttempts = 0;
+    const maxReconnectAttempts = 10;
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function createMessageElement(msg) {
+        const isSent = msg.is_sent;
+        const justifyClass = isSent ? 'justify-end' : 'justify-start';
+        const bgClass = isSent ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-800';
+        const timeClass = isSent ? 'text-emerald-100' : 'text-gray-500';
+
+        const div = document.createElement('div');
+        div.className = 'flex ' + justifyClass;
+        div.innerHTML = `
+            <div class="max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${bgClass}">
+                <p>${escapeHtml(msg.content)}</p>
+                <p class="text-xs mt-1 ${timeClass}">${escapeHtml(msg.created_at)}</p>
+            </div>
+        `;
+        return div;
+    }
+
+    function handleMessage(data) {
+        if (data.type !== 'message') return;
+
+        const msg = data.payload;
+        const messagesContainer = document.getElementById('messages');
+
+        // Determine if this message belongs to the active conversation
+        const isFromActiveConversation = (
+            (msg.sender_id === activeUserID) ||
+            (msg.sender_id === currentUserID && activeUserID > 0)
+        );
+
+        // Append message if in the correct conversation
+        if (messagesContainer && isFromActiveConversation) {
+            // For received messages, check it's from the active user
+            // For sent messages (from other devices), we should show them
+            if (msg.sender_id === activeUserID || msg.is_sent) {
+                const element = createMessageElement(msg);
+                // Messages container uses flex-col-reverse, so prepend to show at bottom
+                messagesContainer.insertBefore(element, messagesContainer.firstChild);
+            }
+        }
+
+        // Refresh the page to update conversation list for simplicity
+        // A more sophisticated approach would update the sidebar via DOM manipulation
+        if (!isFromActiveConversation && msg.sender_id !== currentUserID) {
+            // New message from someone not in active conversation - reload to update sidebar
+            window.location.reload();
+        }
+    }
+
+    function connect() {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        ws = new WebSocket(protocol + '//' + window.location.host + '/ws');
+
+        ws.onopen = function() {
+            console.log('WebSocket connected');
+            reconnectAttempts = 0;
+        };
+
+        ws.onmessage = function(event) {
+            try {
+                const data = JSON.parse(event.data);
+                handleMessage(data);
+            } catch (e) {
+                console.error('Failed to parse WebSocket message:', e);
+            }
+        };
+
+        ws.onclose = function() {
+            console.log('WebSocket disconnected');
+            if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+                console.log('Reconnecting in', delay, 'ms...');
+                setTimeout(connect, delay);
+            }
+        };
+
+        ws.onerror = function(error) {
+            console.error('WebSocket error:', error);
+        };
+    }
+
+    connect();
+})();
 </script>
 {{end}}
