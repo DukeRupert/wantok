@@ -20,6 +20,7 @@ import (
 	"github.com/dukerupert/wantok/internal/auth"
 	"github.com/dukerupert/wantok/internal/database"
 	"github.com/dukerupert/wantok/internal/handlers"
+	"github.com/dukerupert/wantok/internal/realtime"
 	"github.com/dukerupert/wantok/internal/render"
 	"github.com/dukerupert/wantok/internal/store"
 	"golang.org/x/term"
@@ -165,7 +166,11 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	}
 	slog.Info("template renderer initialized", "type", "lifecycle")
 
-	srv := handlers.NewServer(queries, renderer)
+	// Create and start WebSocket hub
+	hub := realtime.NewHub()
+	go hub.Run()
+
+	srv := handlers.NewServer(queries, renderer, hub)
 	httpServer := &http.Server{
 		Addr:    net.JoinHostPort(cfg.Host, cfg.ListenAddr),
 		Handler: srv,

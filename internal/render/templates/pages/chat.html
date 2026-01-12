@@ -138,4 +138,54 @@
 <style>
     [x-cloak] { display: none !important; }
 </style>
+
+<script>
+// WebSocket connection for real-time messaging
+// TODO: Implement when Phase 4 handlers are complete
+//
+// Implementation notes:
+// - Connect to ws://host/ws on page load
+// - Handle message events to append new messages to chat
+// - Handle reconnection on disconnect with exponential backoff
+// - Update conversation list when new message arrives
+//
+// (function() {
+//     let ws = null;
+//     let reconnectAttempts = 0;
+//     const maxReconnectAttempts = 5;
+//
+//     function connect() {
+//         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+//         ws = new WebSocket(protocol + '//' + window.location.host + '/ws');
+//
+//         ws.onopen = function() {
+//             console.log('WebSocket connected');
+//             reconnectAttempts = 0;
+//         };
+//
+//         ws.onmessage = function(event) {
+//             const data = JSON.parse(event.data);
+//             if (data.type === 'message') {
+//                 // Append message to chat if in correct conversation
+//                 // Update conversation list sidebar
+//             }
+//         };
+//
+//         ws.onclose = function() {
+//             console.log('WebSocket disconnected');
+//             if (reconnectAttempts < maxReconnectAttempts) {
+//                 reconnectAttempts++;
+//                 const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+//                 setTimeout(connect, delay);
+//             }
+//         };
+//
+//         ws.onerror = function(error) {
+//             console.error('WebSocket error:', error);
+//         };
+//     }
+//
+//     connect();
+// })();
+</script>
 {{end}}
