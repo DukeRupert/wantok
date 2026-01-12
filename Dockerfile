@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
@@ -42,6 +42,7 @@ EXPOSE 8080
 
 # Set default environment variables
 ENV DATABASE_PATH=/app/data/wantok.db
+ENV HOST=0.0.0.0
 ENV PORT=8080
 ENV SECURE_COOKIES=true
 

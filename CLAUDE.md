@@ -29,6 +29,7 @@ goose -dir internal/database/migrations create <name> sql
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATABASE_PATH` | `wantok.db` | SQLite file path |
+| `HOST` | `localhost` | Bind address (`0.0.0.0` for Docker) |
 | `PORT` | `8080` | Server port |
 | `SESSION_SECRET` | `PaxRomana` | Session signing secret |
 | `SESSION_MAX_AGE` | `3600` | Session lifetime in seconds |

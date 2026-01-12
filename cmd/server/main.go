@@ -63,6 +63,11 @@ func loadConfig(args []string) AppConfig {
 		cfg.DatabasePath = path
 	}
 
+	host := getenv("HOST", args)
+	if host != "" {
+		cfg.Host = host
+	}
+
 	port := getenv("PORT", args)
 	if port != "" {
 		cfg.ListenAddr = port
