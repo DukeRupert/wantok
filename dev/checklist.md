@@ -131,36 +131,36 @@ A consolidated checklist for tracking implementation progress. Check items off a
 ## Phase 4: Real-Time Delivery
 
 ### Hub
-- [ ] Hub struct with client map
-- [ ] Register channel and handler
-- [ ] Unregister channel and handler
-- [ ] Broadcast channel and handler
-- [ ] Hub.Run() goroutine
+- [x] Hub struct with client map
+- [x] Register channel and handler
+- [x] Unregister channel and handler
+- [x] Broadcast channel and handler
+- [x] Hub.Run() goroutine
 
 ### Client
-- [ ] Client struct
-- [ ] ReadPump goroutine
-- [ ] WritePump goroutine
-- [ ] Ping/pong handling
+- [x] Client struct
+- [x] ReadPump goroutine
+- [x] WritePump goroutine
+- [x] Ping/pong handling
 
 ### WebSocket Handler
-- [ ] GET /ws endpoint
-- [ ] Auth validation
-- [ ] Connection upgrade
-- [ ] Client registration
+- [x] GET /ws endpoint
+- [x] Auth validation
+- [x] Connection upgrade
+- [x] Client registration
 
 ### Integration
-- [ ] Message handler calls hub.SendToUser
-- [ ] Sender's other devices receive message
-- [ ] Recipient's devices receive message
+- [x] Message handler calls hub.SendToUser
+- [x] Sender's other devices receive message
+- [x] Recipient's devices receive message
 
 ### UI Updates
-- [ ] WebSocket connection on page load
-- [ ] Message event handling
-- [ ] Real-time message append
-- [ ] Conversation list updates
-- [ ] Reconnection logic
-- [ ] Polling code removed
+- [x] WebSocket connection on page load
+- [x] Message event handling
+- [x] Real-time message append
+- [x] Conversation list updates
+- [x] Reconnection logic
+- [x] Polling code removed
 
 ### Phase 4 Verification
 - [ ] WebSocket connects after login
