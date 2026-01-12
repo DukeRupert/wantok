@@ -9,6 +9,7 @@ import (
 	"github.com/dukerupert/wantok/internal/auth"
 	"github.com/dukerupert/wantok/internal/render"
 	"github.com/dukerupert/wantok/internal/store"
+	"github.com/dukerupert/wantok/internal/validate"
 )
 
 // AdminPageData holds data for the admin template.
@@ -62,8 +63,16 @@ func HandleCreateUser(queries *store.Queries, renderer *render.Renderer) http.Ha
 		isAdmin := r.FormValue("is_admin") == "on"
 
 		// Validate input
-		if username == "" || displayName == "" || password == "" {
-			renderAdminError(w, queries, renderer, ctx, user, "All fields are required")
+		if err := validate.Username(username); err != nil {
+			renderAdminError(w, queries, renderer, ctx, user, err.Error())
+			return
+		}
+		if err := validate.DisplayName(displayName); err != nil {
+			renderAdminError(w, queries, renderer, ctx, user, err.Error())
+			return
+		}
+		if err := validate.Password(password); err != nil {
+			renderAdminError(w, queries, renderer, ctx, user, err.Error())
 			return
 		}
 
@@ -122,9 +131,16 @@ func HandleUpdateUser(queries *store.Queries, renderer *render.Renderer) http.Ha
 		isAdmin := r.FormValue("is_admin") == "on"
 
 		// Validate input
-		if displayName == "" {
-			renderAdminError(w, queries, renderer, ctx, user, "Display name is required")
+		if err := validate.DisplayName(displayName); err != nil {
+			renderAdminError(w, queries, renderer, ctx, user, err.Error())
 			return
+		}
+		// Password is optional for updates, but validate if provided
+		if password != "" {
+			if err := validate.Password(password); err != nil {
+				renderAdminError(w, queries, renderer, ctx, user, err.Error())
+				return
+			}
 		}
 
 		// Get existing user to preserve password if not changed

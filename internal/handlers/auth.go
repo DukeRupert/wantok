@@ -12,7 +12,12 @@ import (
 const (
 	sessionCookieName = "session"
 	sessionMaxAge     = 30 * 24 * 60 * 60 // 30 days in seconds
+	maxInputLength    = 256               // Max length for login inputs
 )
+
+// SecureCookies controls whether Secure flag is set on cookies.
+// Set to false for development over HTTP.
+var SecureCookies = true
 
 // LoginPageData holds data for the login template.
 type LoginPageData struct {
@@ -53,6 +58,14 @@ func HandleLogin(queries *store.Queries, renderer *render.Renderer) http.Handler
 		}
 		username := r.FormValue("username")
 		password := r.FormValue("password")
+
+		// Basic length validation to prevent abuse
+		if len(username) > maxInputLength || len(password) > maxInputLength {
+			w.WriteHeader(http.StatusBadRequest)
+			renderer.Render(w, "login", LoginPageData{Error: "Invalid username or password"})
+			return
+		}
+
 		// Look up user by username
 		user, err := queries.GetUserByUsername(ctx, username)
 		// If not found, re-render login with error (don't reveal user doesn't exist)
@@ -146,7 +159,7 @@ func setSessionCookie(w http.ResponseWriter, token string) {
 		Path:     "/",
 		MaxAge:   sessionMaxAge,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   SecureCookies,
 		SameSite: http.SameSiteLaxMode,
 	}
 	http.SetCookie(w, cookie)
@@ -160,7 +173,7 @@ func clearSessionCookie(w http.ResponseWriter) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   SecureCookies,
 		SameSite: http.SameSiteLaxMode,
 	}
 	http.SetCookie(w, cookie)

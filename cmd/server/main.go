@@ -34,6 +34,7 @@ type AppConfig struct {
 	ListenAddr    string
 	SessionSecret string
 	SessionMaxAge int
+	SecureCookies bool
 }
 
 func getenv(target string, list []string) string {
@@ -54,6 +55,7 @@ func loadConfig(args []string) AppConfig {
 		ListenAddr:    "8080",
 		SessionSecret: "PaxRomana",
 		SessionMaxAge: 3600,
+		SecureCookies: true, // Default to secure (production)
 	}
 
 	path := getenv("DATABASE_PATH", args)
@@ -80,6 +82,12 @@ func loadConfig(args []string) AppConfig {
 		}
 		cfg.SessionMaxAge = i
 	}
+
+	// SECURE_COOKIES=false disables Secure flag for local development
+	if getenv("SECURE_COOKIES", args) == "false" {
+		cfg.SecureCookies = false
+	}
+
 	return cfg
 }
 
@@ -166,6 +174,10 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 		return fmt.Errorf("failed to create renderer: %w", err)
 	}
 	slog.Info("template renderer initialized", "type", "lifecycle")
+
+	// Set secure cookies based on config
+	handlers.SecureCookies = cfg.SecureCookies
+	slog.Info("cookie security configured", "type", "lifecycle", "secure", cfg.SecureCookies)
 
 	// Create and start WebSocket hub
 	hub := realtime.NewHub()

@@ -13,6 +13,7 @@ import (
 	"github.com/dukerupert/wantok/internal/realtime"
 	"github.com/dukerupert/wantok/internal/render"
 	"github.com/dukerupert/wantok/internal/store"
+	"github.com/dukerupert/wantok/internal/validate"
 )
 
 // ConversationListItem represents a conversation in the sidebar.
@@ -213,8 +214,8 @@ func HandleSendMessage(queries *store.Queries, hub *realtime.Hub) http.HandlerFu
 		}
 
 		content := strings.TrimSpace(r.FormValue("content"))
-		if content == "" {
-			http.Error(w, "Message content is required", http.StatusBadRequest)
+		if err := validate.Message(content); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
