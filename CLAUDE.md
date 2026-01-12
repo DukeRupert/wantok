@@ -32,6 +32,7 @@ goose -dir internal/database/migrations create <name> sql
 | `PORT` | `8080` | Server port |
 | `SESSION_SECRET` | `PaxRomana` | Session signing secret |
 | `SESSION_MAX_AGE` | `3600` | Session lifetime in seconds |
+| `SECURE_COOKIES` | `true` | Set to `false` for local HTTP development |
 
 ## Architecture
 
@@ -41,10 +42,17 @@ goose -dir internal/database/migrations create <name> sql
 cmd/server/main.go     - Entry point, config loading, HTTP server setup
 internal/
   auth/                - Password hashing (bcrypt), session management, middleware
+  cleanup/             - Background job for expired sessions and old messages
   database/            - SQLite connection with embedded goose migrations
   handlers/            - HTTP handlers (auth, users, admin, messages, websocket)
   realtime/            - WebSocket hub and client management for real-time delivery
+  render/              - HTML template rendering
   store/               - SQLC-generated database queries
+  validate/            - Input validation for usernames, passwords, messages
+deploy/
+  wantok.service       - Systemd service file
+  Caddyfile            - Caddy reverse proxy config
+  backup.sh            - Database backup script
 ```
 
 ### Key Patterns
@@ -73,12 +81,17 @@ Run `sqlc generate` after modifying any `.sql` query files.
 
 ## Implementation Status
 
-The project is in early development. See `dev/checklist.md` for detailed progress tracking. Currently completed:
-- Project setup and dependencies
-- Database layer with migrations (users, sessions, messages tables)
-- SQLC code generation
+See `dev/checklist.md` for detailed progress tracking. Completed phases:
+- Phase 1: Auth Foundation (login, logout, sessions, middleware)
+- Phase 2: User Management (admin CLI, user CRUD)
+- Phase 3: Messaging (conversations, message sending via REST)
+- Phase 4: Real-Time Delivery (WebSocket hub, live message updates)
+- Phase 5: Cleanup and Hardening (background jobs, validation, mobile UI)
 
-In progress:
-- Auth logic (password hashing, session management)
-- HTTP handlers and middleware
-- WebSocket real-time delivery
+## Security Notes
+
+- CSRF protection via SameSite=Lax cookies (form submissions require same-origin)
+- XSS prevention via Go's html/template automatic escaping
+- SQL injection prevention via SQLC parameterized queries
+- Session cookies are HttpOnly and Secure (in production)
+- Input validation on all user-supplied data (username, password, messages)

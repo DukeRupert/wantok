@@ -179,25 +179,25 @@ A consolidated checklist for tracking implementation progress. Check items off a
 ## Phase 5: Cleanup and Hardening
 
 ### Background Jobs
-- [ ] Message expiry (30 days)
-- [ ] Session cleanup
+- [x] Message expiry (30 days)
+- [x] Session cleanup
 
 ### Security
-- [ ] CSRF protection (or SameSite reliance documented)
-- [ ] Input validation (username, display name, password, message)
-- [ ] No SQL injection (parameterised queries)
-- [ ] XSS prevention (template escaping)
+- [x] CSRF protection (or SameSite reliance documented)
+- [x] Input validation (username, display name, password, message)
+- [x] No SQL injection (parameterised queries)
+- [x] XSS prevention (template escaping)
 
 ### Production Config
-- [ ] Secure cookie flag
-- [ ] HTTPS via Caddy
-- [ ] Systemd service file
-- [ ] Backup script
+- [x] Secure cookie flag
+- [x] HTTPS via Caddy
+- [x] Systemd service file
+- [x] Backup script
 
 ### Mobile UI
-- [ ] Responsive layout
-- [ ] Touch-friendly targets
-- [ ] Virtual keyboard handling
+- [x] Responsive layout
+- [x] Touch-friendly targets
+- [x] Virtual keyboard handling
 
 ### Phase 5 Verification
 - [ ] Old messages deleted (backdate to test)
