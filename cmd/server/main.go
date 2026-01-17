@@ -36,13 +36,21 @@ type AppConfig struct {
 	SessionMaxAge int
 	SecureCookies bool
 
+	// Email provider: "postmark" or "smtp"
+	EmailProvider string
+
 	// SMTP configuration
 	SMTPHost     string
 	SMTPPort     int
 	SMTPUsername string
 	SMTPPassword string
-	SMTPFrom     string
 	SMTPTLS      bool
+
+	// Postmark configuration
+	PostmarkServerToken string
+
+	// Common email configuration
+	EmailFrom string
 
 	// Base URL for email links
 	BaseURL string
@@ -106,11 +114,26 @@ func loadConfig(args []string) AppConfig {
 		cfg.SecureCookies = false
 	}
 
+	// Email provider selection (defaults to "postmark" if POSTMARK_SERVER_TOKEN is set, else "smtp")
+	cfg.EmailProvider = getenv("EMAIL_PROVIDER", args)
+	cfg.PostmarkServerToken = getenv("POSTMARK_SERVER_TOKEN", args)
+
+	// Auto-detect provider if not explicitly set
+	if cfg.EmailProvider == "" {
+		if cfg.PostmarkServerToken != "" {
+			cfg.EmailProvider = "postmark"
+		} else {
+			cfg.EmailProvider = "smtp"
+		}
+	}
+
+	// Common email config
+	cfg.EmailFrom = getenv("EMAIL_FROM", args)
+
 	// SMTP configuration
 	cfg.SMTPHost = getenv("SMTP_HOST", args)
 	cfg.SMTPUsername = getenv("SMTP_USERNAME", args)
 	cfg.SMTPPassword = getenv("SMTP_PASSWORD", args)
-	cfg.SMTPFrom = getenv("SMTP_FROM", args)
 
 	smtpPort := getenv("SMTP_PORT", args)
 	if smtpPort != "" {
@@ -212,15 +235,17 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 
 	// Create email mailer
 	mailer := email.New(email.Config{
-		Host:     cfg.SMTPHost,
-		Port:     cfg.SMTPPort,
-		Username: cfg.SMTPUsername,
-		Password: cfg.SMTPPassword,
-		From:     cfg.SMTPFrom,
-		TLS:      cfg.SMTPTLS,
+		Provider:            email.Provider(cfg.EmailProvider),
+		SMTPHost:            cfg.SMTPHost,
+		SMTPPort:            cfg.SMTPPort,
+		SMTPUsername:        cfg.SMTPUsername,
+		SMTPPassword:        cfg.SMTPPassword,
+		SMTPTLS:             cfg.SMTPTLS,
+		PostmarkServerToken: cfg.PostmarkServerToken,
+		From:                cfg.EmailFrom,
 	}, cfg.BaseURL)
 	if mailer.Enabled() {
-		slog.Info("email service configured", "type", "lifecycle", "host", cfg.SMTPHost)
+		slog.Info("email service configured", "type", "lifecycle", "provider", cfg.EmailProvider)
 	} else {
 		slog.Warn("email service not configured - invitations and magic links will not work", "type", "lifecycle")
 	}

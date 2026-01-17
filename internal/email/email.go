@@ -1,28 +1,50 @@
-// Package email provides SMTP email sending functionality.
+// Package email provides email sending functionality via SMTP or Postmark.
 package email
 
 import (
+	"bytes"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"net/smtp"
 	"strings"
+	"time"
 )
 
-// Config holds SMTP configuration.
+// Provider specifies the email service provider.
+type Provider string
+
+const (
+	ProviderSMTP     Provider = "smtp"
+	ProviderPostmark Provider = "postmark"
+)
+
+// Config holds email configuration.
 type Config struct {
-	Host     string
-	Port     int
-	Username string
-	Password string
-	From     string
-	TLS      bool
+	Provider Provider
+
+	// SMTP configuration
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUsername string
+	SMTPPassword string
+	SMTPTLS      bool
+
+	// Postmark configuration
+	PostmarkServerToken string
+
+	// Common configuration
+	From string
 }
 
-// Mailer handles email sending via SMTP.
+// Mailer handles email sending.
 type Mailer struct {
-	config  Config
-	baseURL string
+	config     Config
+	baseURL    string
+	httpClient *http.Client
 }
 
 // New creates a new Mailer with the given configuration.
@@ -30,6 +52,9 @@ func New(cfg Config, baseURL string) *Mailer {
 	return &Mailer{
 		config:  cfg,
 		baseURL: strings.TrimSuffix(baseURL, "/"),
+		httpClient: &http.Client{
+			Timeout: 30 * time.Second,
+		},
 	}
 }
 
@@ -38,7 +63,7 @@ func (m *Mailer) SendInvitation(to, token string) error {
 	link := fmt.Sprintf("%s/register/%s", m.baseURL, token)
 
 	subject := "You're invited to join Wantok"
-	body := fmt.Sprintf(`Hello,
+	textBody := fmt.Sprintf(`Hello,
 
 You've been invited to join Wantok, a family messaging app.
 
@@ -51,7 +76,15 @@ If you didn't expect this invitation, you can safely ignore this email.
 
 - The Wantok Family`, link)
 
-	return m.send(to, subject, body)
+	htmlBody := fmt.Sprintf(`<p>Hello,</p>
+<p>You've been invited to join Wantok, a family messaging app.</p>
+<p><a href="%s">Click here to create your account</a></p>
+<p>Or copy this link: %s</p>
+<p>This link will expire in 7 days.</p>
+<p>If you didn't expect this invitation, you can safely ignore this email.</p>
+<p>- The Wantok Family</p>`, link, link)
+
+	return m.send(to, subject, textBody, htmlBody)
 }
 
 // SendMagicLink sends a magic link email for passwordless login.
@@ -59,7 +92,7 @@ func (m *Mailer) SendMagicLink(to, token string) error {
 	link := fmt.Sprintf("%s/auth/magic/%s", m.baseURL, token)
 
 	subject := "Your Wantok login link"
-	body := fmt.Sprintf(`Hello,
+	textBody := fmt.Sprintf(`Hello,
 
 Click the link below to sign in to Wantok:
 %s
@@ -70,11 +103,115 @@ If you didn't request this link, you can safely ignore this email.
 
 - The Wantok Family`, link)
 
-	return m.send(to, subject, body)
+	htmlBody := fmt.Sprintf(`<p>Hello,</p>
+<p><a href="%s">Click here to sign in to Wantok</a></p>
+<p>Or copy this link: %s</p>
+<p>This link will expire in 24 hours and can only be used once.</p>
+<p>If you didn't request this link, you can safely ignore this email.</p>
+<p>- The Wantok Family</p>`, link, link)
+
+	return m.send(to, subject, textBody, htmlBody)
 }
 
-// send sends an email via SMTP.
-func (m *Mailer) send(to, subject, body string) error {
+// send sends an email using the configured provider.
+func (m *Mailer) send(to, subject, textBody, htmlBody string) error {
+	switch m.config.Provider {
+	case ProviderPostmark:
+		return m.sendPostmark(to, subject, textBody, htmlBody)
+	case ProviderSMTP:
+		return m.sendSMTP(to, subject, textBody)
+	default:
+		// Default to SMTP for backwards compatibility
+		return m.sendSMTP(to, subject, textBody)
+	}
+}
+
+// Enabled returns true if the mailer is configured and ready to send emails.
+func (m *Mailer) Enabled() bool {
+	switch m.config.Provider {
+	case ProviderPostmark:
+		return m.config.PostmarkServerToken != ""
+	case ProviderSMTP:
+		return m.config.SMTPHost != ""
+	default:
+		return m.config.SMTPHost != "" || m.config.PostmarkServerToken != ""
+	}
+}
+
+// postmarkEmail represents the Postmark API email payload.
+type postmarkEmail struct {
+	From     string `json:"From"`
+	To       string `json:"To"`
+	Subject  string `json:"Subject"`
+	TextBody string `json:"TextBody,omitempty"`
+	HtmlBody string `json:"HtmlBody,omitempty"`
+}
+
+// postmarkResponse represents the Postmark API response.
+type postmarkResponse struct {
+	ErrorCode int    `json:"ErrorCode"`
+	Message   string `json:"Message"`
+	MessageID string `json:"MessageID"`
+}
+
+// sendPostmark sends an email via Postmark API.
+func (m *Mailer) sendPostmark(to, subject, textBody, htmlBody string) error {
+	email := postmarkEmail{
+		From:     m.config.From,
+		To:       to,
+		Subject:  subject,
+		TextBody: textBody,
+		HtmlBody: htmlBody,
+	}
+
+	payload, err := json.Marshal(email)
+	if err != nil {
+		return fmt.Errorf("failed to marshal email: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", "https://api.postmarkapp.com/email", bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Postmark-Server-Token", m.config.PostmarkServerToken)
+
+	resp, err := m.httpClient.Do(req)
+	if err != nil {
+		slog.Error("failed to send email via Postmark", "to", to, "error", err)
+		return fmt.Errorf("failed to send email: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var pmResp postmarkResponse
+		if err := json.Unmarshal(body, &pmResp); err == nil && pmResp.Message != "" {
+			slog.Error("Postmark API error", "to", to, "status", resp.StatusCode, "error", pmResp.Message, "code", pmResp.ErrorCode)
+			return fmt.Errorf("Postmark error: %s (code %d)", pmResp.Message, pmResp.ErrorCode)
+		}
+		slog.Error("Postmark API error", "to", to, "status", resp.StatusCode, "body", string(body))
+		return fmt.Errorf("Postmark error: status %d", resp.StatusCode)
+	}
+
+	var pmResp postmarkResponse
+	if err := json.Unmarshal(body, &pmResp); err == nil {
+		slog.Info("email sent via Postmark", "to", to, "subject", subject, "message_id", pmResp.MessageID)
+	} else {
+		slog.Info("email sent via Postmark", "to", to, "subject", subject)
+	}
+
+	return nil
+}
+
+// sendSMTP sends an email via SMTP.
+func (m *Mailer) sendSMTP(to, subject, body string) error {
 	// Build the email message
 	msg := fmt.Sprintf("From: %s\r\n"+
 		"To: %s\r\n"+
@@ -84,39 +221,39 @@ func (m *Mailer) send(to, subject, body string) error {
 		"\r\n"+
 		"%s", m.config.From, to, subject, body)
 
-	addr := fmt.Sprintf("%s:%d", m.config.Host, m.config.Port)
+	addr := fmt.Sprintf("%s:%d", m.config.SMTPHost, m.config.SMTPPort)
 
 	var auth smtp.Auth
-	if m.config.Username != "" {
-		auth = smtp.PlainAuth("", m.config.Username, m.config.Password, m.config.Host)
+	if m.config.SMTPUsername != "" {
+		auth = smtp.PlainAuth("", m.config.SMTPUsername, m.config.SMTPPassword, m.config.SMTPHost)
 	}
 
-	if m.config.TLS {
-		return m.sendTLS(addr, auth, to, []byte(msg))
+	if m.config.SMTPTLS {
+		return m.sendSMTPTLS(addr, auth, to, []byte(msg))
 	}
 
 	err := smtp.SendMail(addr, auth, m.config.From, []string{to}, []byte(msg))
 	if err != nil {
-		slog.Error("failed to send email", "to", to, "error", err)
+		slog.Error("failed to send email via SMTP", "to", to, "error", err)
 		return fmt.Errorf("failed to send email: %w", err)
 	}
 
-	slog.Info("email sent", "to", to, "subject", subject)
+	slog.Info("email sent via SMTP", "to", to, "subject", subject)
 	return nil
 }
 
-// sendTLS sends an email using explicit TLS connection.
-func (m *Mailer) sendTLS(addr string, auth smtp.Auth, to string, msg []byte) error {
+// sendSMTPTLS sends an email using explicit TLS connection.
+func (m *Mailer) sendSMTPTLS(addr string, auth smtp.Auth, to string, msg []byte) error {
 	// Connect to the server
 	conn, err := tls.Dial("tcp", addr, &tls.Config{
-		ServerName: m.config.Host,
+		ServerName: m.config.SMTPHost,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to connect to SMTP server: %w", err)
 	}
 	defer conn.Close()
 
-	client, err := smtp.NewClient(conn, m.config.Host)
+	client, err := smtp.NewClient(conn, m.config.SMTPHost)
 	if err != nil {
 		return fmt.Errorf("failed to create SMTP client: %w", err)
 	}
@@ -153,11 +290,6 @@ func (m *Mailer) sendTLS(addr string, auth smtp.Auth, to string, msg []byte) err
 		slog.Warn("SMTP quit failed", "error", err)
 	}
 
-	slog.Info("email sent via TLS", "to", to)
+	slog.Info("email sent via SMTP TLS", "to", to)
 	return nil
-}
-
-// Enabled returns true if the mailer is configured and ready to send emails.
-func (m *Mailer) Enabled() bool {
-	return m.config.Host != ""
 }
