@@ -1,6 +1,8 @@
 -- +goose Up
 -- Add email column to users (nullable for existing users)
-ALTER TABLE users ADD COLUMN email TEXT UNIQUE;
+-- Note: SQLite doesn't allow UNIQUE constraint in ALTER TABLE, so we add it separately
+ALTER TABLE users ADD COLUMN email TEXT;
+CREATE UNIQUE INDEX idx_users_email ON users(email);
 
 -- Invitations table for email-based registration
 CREATE TABLE invitations (
@@ -35,6 +37,7 @@ DROP INDEX idx_invitations_email;
 DROP TABLE invitations;
 
 -- SQLite doesn't support DROP COLUMN, so we need to recreate the table
+DROP INDEX idx_users_email;
 CREATE TABLE users_backup AS SELECT id, username, display_name, password_hash, is_admin, created_at FROM users;
 DROP TABLE users;
 CREATE TABLE users (
