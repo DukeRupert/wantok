@@ -10,18 +10,23 @@ import (
 var (
 	// usernameRegex allows alphanumeric characters and underscores
 	usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+	// emailRegex is a basic email validation pattern
+	emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`)
 
-	ErrUsernameEmpty     = errors.New("username is required")
-	ErrUsernameTooShort  = errors.New("username must be at least 3 characters")
-	ErrUsernameTooLong   = errors.New("username must be at most 32 characters")
-	ErrUsernameInvalid   = errors.New("username must contain only letters, numbers, and underscores")
-	ErrDisplayNameEmpty  = errors.New("display name is required")
+	ErrUsernameEmpty      = errors.New("username is required")
+	ErrUsernameTooShort   = errors.New("username must be at least 3 characters")
+	ErrUsernameTooLong    = errors.New("username must be at most 32 characters")
+	ErrUsernameInvalid    = errors.New("username must contain only letters, numbers, and underscores")
+	ErrDisplayNameEmpty   = errors.New("display name is required")
 	ErrDisplayNameTooLong = errors.New("display name must be at most 64 characters")
-	ErrPasswordEmpty     = errors.New("password is required")
-	ErrPasswordTooShort  = errors.New("password must be at least 8 characters")
-	ErrPasswordTooLong   = errors.New("password must be at most 128 characters")
-	ErrMessageEmpty      = errors.New("message cannot be empty")
-	ErrMessageTooLong    = errors.New("message must be at most 4096 characters")
+	ErrPasswordEmpty      = errors.New("password is required")
+	ErrPasswordTooShort   = errors.New("password must be at least 8 characters")
+	ErrPasswordTooLong    = errors.New("password must be at most 128 characters")
+	ErrMessageEmpty       = errors.New("message cannot be empty")
+	ErrMessageTooLong     = errors.New("message must be at most 4096 characters")
+	ErrEmailEmpty         = errors.New("email is required")
+	ErrEmailTooLong       = errors.New("email must be at most 254 characters")
+	ErrEmailInvalid       = errors.New("invalid email address")
 )
 
 // Username validates a username.
@@ -80,6 +85,22 @@ func Message(s string) error {
 	}
 	if utf8.RuneCountInString(s) > 4096 {
 		return ErrMessageTooLong
+	}
+	return nil
+}
+
+// Email validates an email address.
+// Must be a valid email format and at most 254 characters.
+func Email(s string) error {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ErrEmailEmpty
+	}
+	if len(s) > 254 {
+		return ErrEmailTooLong
+	}
+	if !emailRegex.MatchString(s) {
+		return ErrEmailInvalid
 	}
 	return nil
 }

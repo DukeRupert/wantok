@@ -7,12 +7,13 @@ package store
 
 import (
 	"context"
+	"database/sql"
 )
 
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, display_name, password_hash, is_admin)
 VALUES (?, ?, ?, ?)
-RETURNING id, username, display_name, password_hash, is_admin, created_at
+RETURNING id, username, display_name, password_hash, is_admin, created_at, email
 `
 
 type CreateUserParams struct {
@@ -37,6 +38,42 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.PasswordHash,
 		&i.IsAdmin,
 		&i.CreatedAt,
+		&i.Email,
+	)
+	return i, err
+}
+
+const createUserWithEmail = `-- name: CreateUserWithEmail :one
+INSERT INTO users (username, display_name, password_hash, email, is_admin)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, username, display_name, password_hash, is_admin, created_at, email
+`
+
+type CreateUserWithEmailParams struct {
+	Username     string
+	DisplayName  string
+	PasswordHash string
+	Email        sql.NullString
+	IsAdmin      int64
+}
+
+func (q *Queries) CreateUserWithEmail(ctx context.Context, arg CreateUserWithEmailParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, createUserWithEmail,
+		arg.Username,
+		arg.DisplayName,
+		arg.PasswordHash,
+		arg.Email,
+		arg.IsAdmin,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.DisplayName,
+		&i.PasswordHash,
+		&i.IsAdmin,
+		&i.CreatedAt,
+		&i.Email,
 	)
 	return i, err
 }
@@ -50,8 +87,27 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	return err
 }
 
+const getUserByEmail = `-- name: GetUserByEmail :one
+SELECT id, username, display_name, password_hash, is_admin, created_at, email FROM users WHERE email = ?
+`
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email sql.NullString) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByEmail, email)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.DisplayName,
+		&i.PasswordHash,
+		&i.IsAdmin,
+		&i.CreatedAt,
+		&i.Email,
+	)
+	return i, err
+}
+
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, display_name, password_hash, is_admin, created_at FROM users WHERE id = ?
+SELECT id, username, display_name, password_hash, is_admin, created_at, email FROM users WHERE id = ?
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
@@ -64,12 +120,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.PasswordHash,
 		&i.IsAdmin,
 		&i.CreatedAt,
+		&i.Email,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, display_name, password_hash, is_admin, created_at FROM users WHERE username = ?
+SELECT id, username, display_name, password_hash, is_admin, created_at, email FROM users WHERE username = ?
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -82,12 +139,13 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.PasswordHash,
 		&i.IsAdmin,
 		&i.CreatedAt,
+		&i.Email,
 	)
 	return i, err
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, display_name, password_hash, is_admin, created_at FROM users ORDER BY display_name
+SELECT id, username, display_name, password_hash, is_admin, created_at, email FROM users ORDER BY display_name
 `
 
 func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
@@ -106,6 +164,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.PasswordHash,
 			&i.IsAdmin,
 			&i.CreatedAt,
+			&i.Email,
 		); err != nil {
 			return nil, err
 		}
@@ -121,7 +180,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 }
 
 const listUsersExcept = `-- name: ListUsersExcept :many
-SELECT id, username, display_name, password_hash, is_admin, created_at FROM users WHERE id != ? ORDER BY display_name
+SELECT id, username, display_name, password_hash, is_admin, created_at, email FROM users WHERE id != ? ORDER BY display_name
 `
 
 func (q *Queries) ListUsersExcept(ctx context.Context, id int64) ([]User, error) {
@@ -140,6 +199,7 @@ func (q *Queries) ListUsersExcept(ctx context.Context, id int64) ([]User, error)
 			&i.PasswordHash,
 			&i.IsAdmin,
 			&i.CreatedAt,
+			&i.Email,
 		); err != nil {
 			return nil, err
 		}
@@ -190,5 +250,19 @@ type UpdateUserDisplayNameParams struct {
 
 func (q *Queries) UpdateUserDisplayName(ctx context.Context, arg UpdateUserDisplayNameParams) error {
 	_, err := q.db.ExecContext(ctx, updateUserDisplayName, arg.DisplayName, arg.ID)
+	return err
+}
+
+const updateUserEmail = `-- name: UpdateUserEmail :exec
+UPDATE users SET email = ? WHERE id = ?
+`
+
+type UpdateUserEmailParams struct {
+	Email sql.NullString
+	ID    int64
+}
+
+func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserEmail, arg.Email, arg.ID)
 	return err
 }

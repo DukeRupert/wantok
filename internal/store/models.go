@@ -4,6 +4,25 @@
 
 package store
 
+import (
+	"database/sql"
+)
+
+type Invitation struct {
+	Token     string
+	Email     string
+	InvitedBy int64
+	CreatedAt string
+	ExpiresAt string
+}
+
+type MagicLink struct {
+	Token     string
+	UserID    int64
+	CreatedAt string
+	ExpiresAt string
+}
+
 type Message struct {
 	ID          int64
 	SenderID    int64
@@ -26,4 +45,5 @@ type User struct {
 	PasswordHash string
 	IsAdmin      int64
 	CreatedAt    string
+	Email        sql.NullString
 }

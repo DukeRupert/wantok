@@ -4,11 +4,12 @@ import (
 	"net/http"
 
 	"github.com/dukerupert/wantok/internal/auth"
+	"github.com/dukerupert/wantok/internal/email"
 	"github.com/dukerupert/wantok/internal/realtime"
 	"github.com/dukerupert/wantok/internal/store"
 )
 
-func NewServer(queries *store.Queries, hub *realtime.Hub) http.Handler {
+func NewServer(queries *store.Queries, hub *realtime.Hub, mailer *email.Mailer) http.Handler {
 	mux := http.NewServeMux()
 
 	// Static files
@@ -18,6 +19,15 @@ func NewServer(queries *store.Queries, hub *realtime.Hub) http.Handler {
 	mux.HandleFunc("GET /login", HandleLoginPage(queries))
 	mux.HandleFunc("POST /auth/login", HandleLogin(queries))
 	mux.HandleFunc("POST /auth/logout", HandleLogout(queries))
+
+	// Magic link routes (public)
+	mux.HandleFunc("GET /login/magic", HandleMagicLinkPage())
+	mux.HandleFunc("POST /login/magic", HandleRequestMagicLink(queries, mailer))
+	mux.HandleFunc("GET /auth/magic/{token}", HandleMagicLinkLogin(queries))
+
+	// Registration routes (public, token-protected)
+	mux.HandleFunc("GET /register/{token}", HandleRegisterPage(queries))
+	mux.HandleFunc("POST /register/{token}", HandleRegister(queries))
 
 	// Protected routes (require auth)
 	mux.Handle("GET /", auth.RequireAuth(queries)(HandleChatPage(queries)))
@@ -33,6 +43,7 @@ func NewServer(queries *store.Queries, hub *realtime.Hub) http.Handler {
 	mux.Handle("POST /admin/users", auth.RequireAuth(queries)(auth.RequireAdmin(HandleCreateUser(queries))))
 	mux.Handle("POST /admin/users/{id}", auth.RequireAuth(queries)(auth.RequireAdmin(HandleUpdateUser(queries))))
 	mux.Handle("POST /admin/users/{id}/delete", auth.RequireAuth(queries)(auth.RequireAdmin(HandleDeleteUser(queries))))
+	mux.Handle("POST /admin/invite", auth.RequireAuth(queries)(auth.RequireAdmin(HandleInviteUser(queries, mailer))))
 
 	// WebSocket route (require auth)
 	mux.Handle("GET /ws", auth.RequireAuth(queries)(HandleWebSocket(hub, queries)))

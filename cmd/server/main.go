@@ -20,6 +20,7 @@ import (
 	"github.com/dukerupert/wantok/internal/auth"
 	"github.com/dukerupert/wantok/internal/cleanup"
 	"github.com/dukerupert/wantok/internal/database"
+	"github.com/dukerupert/wantok/internal/email"
 	"github.com/dukerupert/wantok/internal/handlers"
 	"github.com/dukerupert/wantok/internal/realtime"
 	"github.com/dukerupert/wantok/internal/store"
@@ -34,6 +35,17 @@ type AppConfig struct {
 	SessionSecret string
 	SessionMaxAge int
 	SecureCookies bool
+
+	// SMTP configuration
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUsername string
+	SMTPPassword string
+	SMTPFrom     string
+	SMTPTLS      bool
+
+	// Base URL for email links
+	BaseURL string
 }
 
 func getenv(target string, list []string) string {
@@ -55,6 +67,8 @@ func loadConfig(args []string) AppConfig {
 		SessionSecret: "PaxRomana",
 		SessionMaxAge: 3600,
 		SecureCookies: true, // Default to secure (production)
+		SMTPPort:      587,
+		SMTPTLS:       true,
 	}
 
 	path := getenv("DATABASE_PATH", args)
@@ -91,6 +105,25 @@ func loadConfig(args []string) AppConfig {
 	if getenv("SECURE_COOKIES", args) == "false" {
 		cfg.SecureCookies = false
 	}
+
+	// SMTP configuration
+	cfg.SMTPHost = getenv("SMTP_HOST", args)
+	cfg.SMTPUsername = getenv("SMTP_USERNAME", args)
+	cfg.SMTPPassword = getenv("SMTP_PASSWORD", args)
+	cfg.SMTPFrom = getenv("SMTP_FROM", args)
+
+	smtpPort := getenv("SMTP_PORT", args)
+	if smtpPort != "" {
+		if p, err := strconv.Atoi(smtpPort); err == nil {
+			cfg.SMTPPort = p
+		}
+	}
+
+	if getenv("SMTP_TLS", args) == "false" {
+		cfg.SMTPTLS = false
+	}
+
+	cfg.BaseURL = getenv("BASE_URL", args)
 
 	return cfg
 }
@@ -177,6 +210,21 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	handlers.SecureCookies = cfg.SecureCookies
 	slog.Info("cookie security configured", "type", "lifecycle", "secure", cfg.SecureCookies)
 
+	// Create email mailer
+	mailer := email.New(email.Config{
+		Host:     cfg.SMTPHost,
+		Port:     cfg.SMTPPort,
+		Username: cfg.SMTPUsername,
+		Password: cfg.SMTPPassword,
+		From:     cfg.SMTPFrom,
+		TLS:      cfg.SMTPTLS,
+	}, cfg.BaseURL)
+	if mailer.Enabled() {
+		slog.Info("email service configured", "type", "lifecycle", "host", cfg.SMTPHost)
+	} else {
+		slog.Warn("email service not configured - invitations and magic links will not work", "type", "lifecycle")
+	}
+
 	// Create and start WebSocket hub
 	hub := realtime.NewHub()
 	go hub.Run()
@@ -186,7 +234,7 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	cleaner.Start()
 	defer cleaner.Stop()
 
-	srv := handlers.NewServer(queries, hub)
+	srv := handlers.NewServer(queries, hub, mailer)
 	httpServer := &http.Server{
 		Addr:    net.JoinHostPort(cfg.Host, cfg.ListenAddr),
 		Handler: srv,

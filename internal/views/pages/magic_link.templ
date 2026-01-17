@@ -1,0 +1,76 @@
+package pages
+
+import (
+	"github.com/dukerupert/wantok/internal/components/button"
+	"github.com/dukerupert/wantok/internal/components/card"
+	"github.com/dukerupert/wantok/internal/components/input"
+	"github.com/dukerupert/wantok/internal/components/label"
+	"github.com/dukerupert/wantok/internal/views/layouts"
+)
+
+type MagicLinkPageData struct {
+	Error   string
+	Success bool
+}
+
+templ MagicLink(data MagicLinkPageData) {
+	@layouts.Base("Sign in with Email - Wantok") {
+		<div class="flex items-center justify-center min-h-screen bg-muted/30">
+			@card.Card(card.Props{Class: "w-full max-w-md mx-4"}) {
+				@card.Header(card.HeaderProps{Class: "text-center"}) {
+					@card.Title() {
+						Sign in with Email
+					}
+					@card.Description() {
+						We'll send you a magic link to sign in
+					}
+				}
+				@card.Content() {
+					if data.Success {
+						<div class="text-center space-y-4">
+							<div class="p-4 bg-primary/10 border border-primary/20 text-primary rounded-md">
+								<p class="font-medium">Check your email</p>
+								<p class="text-sm mt-1">We've sent you a link to sign in. It will expire in 24 hours.</p>
+							</div>
+							<a href="/login" class="text-sm text-muted-foreground hover:text-foreground underline">
+								Back to login
+							</a>
+						</div>
+					} else {
+						if data.Error != "" {
+							<div class="mb-4 p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-md text-sm">
+								{ data.Error }
+							</div>
+						}
+						<form action="/login/magic" method="POST" class="space-y-4">
+							<div class="space-y-2">
+								@label.Label(label.Props{For: "email"}) {
+									Email Address
+								}
+								@input.Input(input.Props{
+									ID:          "email",
+									Name:        "email",
+									Type:        input.TypeEmail,
+									Placeholder: "Enter your email",
+									Attributes:  templ.Attributes{"required": true, "autocomplete": "email", "autofocus": true},
+								})
+							</div>
+							@button.Button(button.Props{
+								Type:      button.TypeSubmit,
+								FullWidth: true,
+								Class:     "mt-2",
+							}) {
+								Send Magic Link
+							}
+						</form>
+						<div class="mt-4 text-center">
+							<a href="/login" class="text-sm text-muted-foreground hover:text-foreground underline">
+								Back to login
+							</a>
+						</div>
+					}
+				}
+			}
+		</div>
+	}
+}

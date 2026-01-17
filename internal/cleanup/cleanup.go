@@ -76,4 +76,24 @@ func (c *Cleaner) runCleanup() {
 			slog.Info("deleted old messages", "type", "cleanup", "count", count)
 		}
 	}
+
+	// Delete expired invitations
+	invResult, err := c.queries.DeleteExpiredInvitations(ctx)
+	if err != nil {
+		slog.Error("failed to delete expired invitations", "type", "cleanup", "error", err)
+	} else {
+		if count, _ := invResult.RowsAffected(); count > 0 {
+			slog.Info("deleted expired invitations", "type", "cleanup", "count", count)
+		}
+	}
+
+	// Delete expired magic links
+	mlResult, err := c.queries.DeleteExpiredMagicLinks(ctx)
+	if err != nil {
+		slog.Error("failed to delete expired magic links", "type", "cleanup", "error", err)
+	} else {
+		if count, _ := mlResult.RowsAffected(); count > 0 {
+			slog.Info("deleted expired magic links", "type", "cleanup", "count", count)
+		}
+	}
 }

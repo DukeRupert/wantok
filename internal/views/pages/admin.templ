@@ -64,11 +64,47 @@ templ Admin(data AdminPageData) {
 						{ data.Success }
 					</div>
 				}
+				<!-- Invite User Form -->
+				@card.Card(card.Props{Class: "mb-6"}) {
+					@card.Header() {
+						@card.Title() {
+							Invite User by Email
+						}
+						@card.Description() {
+							Send an invitation link to a family member's email
+						}
+					}
+					@card.Content() {
+						<form action="/admin/invite" method="POST" class="flex flex-col sm:flex-row gap-4">
+							<div class="flex-1 space-y-2">
+								@label.Label(label.Props{For: "invite_email", Class: "sr-only"}) {
+									Email Address
+								}
+								@input.Input(input.Props{
+									ID:          "invite_email",
+									Name:        "email",
+									Type:        input.TypeEmail,
+									Placeholder: "Enter email address",
+									Attributes:  templ.Attributes{"required": true},
+								})
+							</div>
+							@button.Button(button.Props{
+								Type:  button.TypeSubmit,
+								Class: "sm:self-end",
+							}) {
+								Send Invitation
+							}
+						</form>
+					}
+				}
 				<!-- Create User Form -->
 				@card.Card(card.Props{Class: "mb-6"}) {
 					@card.Header() {
 						@card.Title() {
 							Create New User
+						}
+						@card.Description() {
+							Manually create a user with a password
 						}
 					}
 					@card.Content() {

@@ -1,0 +1,112 @@
+package pages
+
+import (
+	"github.com/dukerupert/wantok/internal/components/button"
+	"github.com/dukerupert/wantok/internal/components/card"
+	"github.com/dukerupert/wantok/internal/components/input"
+	"github.com/dukerupert/wantok/internal/components/label"
+	"github.com/dukerupert/wantok/internal/views/layouts"
+)
+
+type RegisterPageData struct {
+	Email string
+	Token string
+	Error string
+}
+
+templ Register(data RegisterPageData) {
+	@layouts.Base("Join Wantok") {
+		<div class="flex items-center justify-center min-h-screen bg-muted/30">
+			@card.Card(card.Props{Class: "w-full max-w-md mx-4"}) {
+				@card.Header(card.HeaderProps{Class: "text-center"}) {
+					@card.Title() {
+						Join Wantok
+					}
+					@card.Description() {
+						Create your account to start messaging
+					}
+				}
+				@card.Content() {
+					if data.Error != "" {
+						<div class="mb-4 p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-md text-sm">
+							{ data.Error }
+						</div>
+					}
+					<form action={ templ.SafeURL("/register/" + data.Token) } method="POST" class="space-y-4">
+						<div class="space-y-2">
+							@label.Label(label.Props{For: "email"}) {
+								Email
+							}
+							@input.Input(input.Props{
+								ID:         "email",
+								Name:       "email",
+								Type:       input.TypeEmail,
+								Value:      data.Email,
+								Readonly:   true,
+								Attributes: templ.Attributes{"tabindex": "-1"},
+							})
+							<p class="text-xs text-muted-foreground">Your invitation was sent to this email</p>
+						</div>
+						<div class="space-y-2">
+							@label.Label(label.Props{For: "username"}) {
+								Username
+							}
+							@input.Input(input.Props{
+								ID:          "username",
+								Name:        "username",
+								Type:        input.TypeText,
+								Placeholder: "Choose a username",
+								Attributes:  templ.Attributes{"required": true, "autocomplete": "username", "autofocus": true},
+							})
+							<p class="text-xs text-muted-foreground">3-32 characters, letters, numbers, and underscores only</p>
+						</div>
+						<div class="space-y-2">
+							@label.Label(label.Props{For: "display_name"}) {
+								Display Name
+							}
+							@input.Input(input.Props{
+								ID:          "display_name",
+								Name:        "display_name",
+								Type:        input.TypeText,
+								Placeholder: "Your name as shown to others",
+								Attributes:  templ.Attributes{"required": true, "autocomplete": "name"},
+							})
+						</div>
+						<div class="space-y-2">
+							@label.Label(label.Props{For: "password"}) {
+								Password
+							}
+							@input.Input(input.Props{
+								ID:          "password",
+								Name:        "password",
+								Type:        input.TypePassword,
+								Placeholder: "Create a password",
+								Attributes:  templ.Attributes{"required": true, "autocomplete": "new-password"},
+							})
+							<p class="text-xs text-muted-foreground">At least 8 characters</p>
+						</div>
+						<div class="space-y-2">
+							@label.Label(label.Props{For: "confirm_password"}) {
+								Confirm Password
+							}
+							@input.Input(input.Props{
+								ID:          "confirm_password",
+								Name:        "confirm_password",
+								Type:        input.TypePassword,
+								Placeholder: "Confirm your password",
+								Attributes:  templ.Attributes{"required": true, "autocomplete": "new-password"},
+							})
+						</div>
+						@button.Button(button.Props{
+							Type:      button.TypeSubmit,
+							FullWidth: true,
+							Class:     "mt-2",
+						}) {
+							Create Account
+						}
+					</form>
+				}
+			}
+		</div>
+	}
+}

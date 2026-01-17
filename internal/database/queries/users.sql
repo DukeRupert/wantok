@@ -27,3 +27,14 @@ WHERE id = ?;
 
 -- name: DeleteUser :exec
 DELETE FROM users WHERE id = ?;
+
+-- name: GetUserByEmail :one
+SELECT * FROM users WHERE email = ?;
+
+-- name: CreateUserWithEmail :one
+INSERT INTO users (username, display_name, password_hash, email, is_admin)
+VALUES (?, ?, ?, ?, ?)
+RETURNING *;
+
+-- name: UpdateUserEmail :exec
+UPDATE users SET email = ? WHERE id = ?;
