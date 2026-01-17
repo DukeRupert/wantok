@@ -1,0 +1,41 @@
+version: "3"
+
+tasks:
+  dev:
+    desc: Run all dev tasks in parallel
+    deps: [templ, tailwind, server]
+
+  templ:
+    desc: Watch and generate templ files
+    cmds:
+      - templ generate --watch --proxy="http://localhost:8080" --open-browser=false
+
+  tailwind:
+    desc: Watch and compile Tailwind CSS
+    cmds:
+      - npx tailwindcss -i assets/css/input.css -o assets/css/output.css --watch
+
+  server:
+    desc: Run Go server
+    env:
+      SECURE_COOKIES: "false"
+      HOST: "0.0.0.0"
+    cmds:
+      - go run ./cmd/server
+
+  build:
+    desc: Build for production
+    cmds:
+      - templ generate
+      - npx tailwindcss -i assets/css/input.css -o assets/css/output.css --minify
+      - CGO_ENABLED=0 go build -o wantok ./cmd/server
+
+  generate:
+    desc: Generate templ files once
+    cmds:
+      - templ generate
+
+  css:
+    desc: Build CSS once
+    cmds:
+      - npx tailwindcss -i assets/css/input.css -o assets/css/output.css

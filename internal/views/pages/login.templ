@@ -1,0 +1,70 @@
+package pages
+
+import (
+	"github.com/dukerupert/wantok/internal/components/button"
+	"github.com/dukerupert/wantok/internal/components/card"
+	"github.com/dukerupert/wantok/internal/components/input"
+	"github.com/dukerupert/wantok/internal/components/label"
+	"github.com/dukerupert/wantok/internal/views/layouts"
+)
+
+type LoginPageData struct {
+	Error string
+}
+
+templ Login(data LoginPageData) {
+	@layouts.Base("Login - Wantok") {
+		<div class="flex items-center justify-center min-h-screen bg-muted/30">
+			@card.Card(card.Props{Class: "w-full max-w-md mx-4"}) {
+				@card.Header(card.HeaderProps{Class: "text-center"}) {
+					@card.Title() {
+						Wantok
+					}
+					@card.Description() {
+						Sign in to your account
+					}
+				}
+				@card.Content() {
+					if data.Error != "" {
+						<div class="mb-4 p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-md text-sm">
+							{ data.Error }
+						</div>
+					}
+					<form action="/auth/login" method="POST" class="space-y-4">
+						<div class="space-y-2">
+							@label.Label(label.Props{For: "username"}) {
+								Username
+							}
+							@input.Input(input.Props{
+								ID:          "username",
+								Name:        "username",
+								Type:        input.TypeText,
+								Placeholder: "Enter your username",
+								Attributes:  templ.Attributes{"required": true, "autocomplete": "username"},
+							})
+						</div>
+						<div class="space-y-2">
+							@label.Label(label.Props{For: "password"}) {
+								Password
+							}
+							@input.Input(input.Props{
+								ID:          "password",
+								Name:        "password",
+								Type:        input.TypePassword,
+								Placeholder: "Enter your password",
+								Attributes:  templ.Attributes{"required": true, "autocomplete": "current-password"},
+							})
+						</div>
+						@button.Button(button.Props{
+							Type:      button.TypeSubmit,
+							FullWidth: true,
+							Class:     "mt-2",
+						}) {
+							Sign In
+						}
+					</form>
+				}
+			}
+		</div>
+	}
+}

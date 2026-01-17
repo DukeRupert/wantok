@@ -1,0 +1,268 @@
+package pages
+
+import (
+	"fmt"
+
+	"github.com/dukerupert/wantok/internal/components/button"
+	"github.com/dukerupert/wantok/internal/components/dialog"
+	"github.com/dukerupert/wantok/internal/components/input"
+	"github.com/dukerupert/wantok/internal/views/layouts"
+	"github.com/dukerupert/wantok/internal/views/partials"
+)
+
+// ConversationListItem represents a conversation in the sidebar.
+type ConversationListItem struct {
+	UserID          int64
+	DisplayName     string
+	LastMessage     string
+	LastMessageTime string
+}
+
+// MessageItem represents a single message in a conversation.
+type MessageItem struct {
+	ID         int64
+	Content    string
+	SenderID   int64
+	SenderName string
+	CreatedAt  string
+	IsSent     bool
+}
+
+// ChatPageData holds data for the chat template.
+type ChatPageData struct {
+	Conversations   []ConversationListItem
+	ActiveUserID    int64
+	ActiveUserName  string
+	Messages        []MessageItem
+	CurrentUserID   int64
+	CurrentUserName string
+	IsAdmin         bool
+}
+
+templ Chat(data ChatPageData) {
+	@layouts.BaseWithScripts("Wantok") {
+		<div class="h-screen flex flex-col">
+			<!-- Header -->
+			<header class="bg-card border-b px-4 py-3 flex justify-between items-center">
+				<div class="flex items-center gap-3">
+					if data.ActiveUserID > 0 {
+						<!-- Back button on mobile when in conversation -->
+						<a href="/" class="md:hidden p-2 -ml-2 text-muted-foreground hover:text-foreground" aria-label="Back to conversations">
+							<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+							</svg>
+						</a>
+					}
+					<h1 class="text-xl font-bold">Wantok</h1>
+				</div>
+				<div class="flex items-center gap-2 sm:gap-4">
+					<span class="text-muted-foreground text-sm sm:text-base truncate max-w-[100px] sm:max-w-none">{ data.CurrentUserName }</span>
+					if data.IsAdmin {
+						<a href="/admin" class="text-primary hover:text-primary/80 text-sm sm:text-base">Admin</a>
+					}
+					<form action="/auth/logout" method="POST" class="inline">
+						@button.Button(button.Props{
+							Type:    button.TypeSubmit,
+							Variant: button.VariantGhost,
+							Size:    button.SizeSm,
+						}) {
+							Logout
+						}
+					</form>
+				</div>
+			</header>
+			<div class="flex-1 flex overflow-hidden">
+				<!-- Sidebar -->
+				<aside class={ "w-full md:w-80 bg-muted/30 border-r flex flex-col", templ.KV("hidden md:flex", data.ActiveUserID > 0) }>
+					<!-- New Conversation Button -->
+					<div class="p-4 border-b">
+						@dialog.Dialog(dialog.Props{ID: "user-picker"}) {
+							@dialog.Trigger() {
+								@button.Button(button.Props{
+									FullWidth: true,
+								}) {
+									New Conversation
+								}
+							}
+							@dialog.Content() {
+								@dialog.Header() {
+									@dialog.Title() {
+										Start New Conversation
+									}
+									@dialog.Description() {
+										Select a user to start chatting
+									}
+								}
+								<div id="user-list" class="max-h-[300px] overflow-y-auto -mx-2" hx-get="/users" hx-trigger="intersect once" hx-swap="innerHTML">
+									<p class="text-muted-foreground text-center py-4">Loading users...</p>
+								</div>
+							}
+						}
+					</div>
+					<!-- Conversation List -->
+					<div class="flex-1 overflow-y-auto">
+						if len(data.Conversations) > 0 {
+							for _, conv := range data.Conversations {
+								<a
+									href={ templ.SafeURL(fmt.Sprintf("/?user=%d", conv.UserID)) }
+									class={ "block p-4 border-b hover:bg-accent/50", templ.KV("bg-primary/10", conv.UserID == data.ActiveUserID) }
+								>
+									<div class="font-medium">{ conv.DisplayName }</div>
+									<div class="text-sm text-muted-foreground truncate">{ conv.LastMessage }</div>
+								</a>
+							}
+						} else {
+							<p class="p-4 text-muted-foreground text-sm">No conversations yet</p>
+						}
+					</div>
+				</aside>
+				<!-- Main Chat Area -->
+				<main class={ "flex-1 flex flex-col bg-background", templ.KV("hidden md:flex", data.ActiveUserID == 0) }>
+					if data.ActiveUserID > 0 {
+						<!-- Conversation Header -->
+						<div class="border-b px-4 py-3">
+							<h2 class="font-semibold">{ data.ActiveUserName }</h2>
+						</div>
+						<!-- Messages -->
+						<div id="messages" class="flex-1 overflow-y-auto p-4 flex flex-col-reverse gap-2">
+							for _, msg := range data.Messages {
+								@partials.Message(msg.ID, msg.Content, msg.CreatedAt, msg.IsSent)
+							}
+						</div>
+						<!-- Message Input -->
+						<form
+							action={ templ.SafeURL(fmt.Sprintf("/conversations/%d/messages", data.ActiveUserID)) }
+							method="POST"
+							hx-post={ fmt.Sprintf("/conversations/%d/messages", data.ActiveUserID) }
+							hx-target="#messages"
+							hx-swap="afterbegin"
+							hx-on::after-request="this.reset()"
+							class="border-t p-3 sm:p-4 flex gap-2"
+						>
+							@input.Input(input.Props{
+								Name:        "content",
+								Placeholder: "Type a message...",
+								Class:       "flex-1",
+								Attributes:  templ.Attributes{"required": true, "autocomplete": "off"},
+							})
+							@button.Button(button.Props{
+								Type: button.TypeSubmit,
+							}) {
+								Send
+							}
+						</form>
+					} else {
+						<!-- No Conversation Selected -->
+						<div class="hidden md:flex flex-1 items-center justify-center text-muted-foreground">
+							<p>Select a conversation or start a new one</p>
+						</div>
+					}
+				</main>
+			</div>
+		</div>
+		@chatScript(data.CurrentUserID, data.ActiveUserID)
+		@dialog.Script()
+		@input.Script()
+	}
+}
+
+script chatScript(currentUserID, activeUserID int64) {
+	// WebSocket connection for real-time messaging
+	(function() {
+		const currentUser = currentUserID;
+		const activeUser = activeUserID;
+		let ws = null;
+		let reconnectAttempts = 0;
+		const maxReconnectAttempts = 10;
+
+		function escapeHtml(text) {
+			const div = document.createElement('div');
+			div.textContent = text;
+			return div.innerHTML;
+		}
+
+		function messageExists(id) {
+			return document.querySelector('[data-message-id="' + id + '"]') !== null;
+		}
+
+		function createMessageElement(msg) {
+			const isSent = msg.is_sent;
+			const justifyClass = isSent ? 'justify-end' : 'justify-start';
+			const bgClass = isSent ? 'bg-primary text-primary-foreground' : 'bg-muted';
+			const timeClass = isSent ? 'text-primary-foreground/70' : 'text-muted-foreground';
+
+			const div = document.createElement('div');
+			div.className = 'flex ' + justifyClass;
+			div.setAttribute('data-message-id', msg.id);
+			div.innerHTML = '<div class="max-w-[85%] sm:max-w-xs lg:max-w-md px-4 py-2 rounded-lg ' + bgClass + '"><p class="break-words">' + escapeHtml(msg.content) + '</p><p class="text-xs mt-1 ' + timeClass + '">' + escapeHtml(msg.created_at) + '</p></div>';
+			return div;
+		}
+
+		function handleMessage(data) {
+			if (data.type !== 'message') return;
+
+			const msg = data.payload;
+
+			// Skip if message already exists in DOM
+			if (messageExists(msg.id)) {
+				return;
+			}
+
+			const messagesContainer = document.getElementById('messages');
+
+			// Determine if this message belongs to the active conversation
+			const isFromActiveConversation = (
+				(msg.sender_id === activeUser) ||
+				(msg.sender_id === currentUser && activeUser > 0)
+			);
+
+			// Append message if in the correct conversation
+			if (messagesContainer && isFromActiveConversation) {
+				if (msg.sender_id === activeUser || msg.is_sent) {
+					const element = createMessageElement(msg);
+					messagesContainer.insertBefore(element, messagesContainer.firstChild);
+				}
+			}
+
+			// Reload for new messages from other conversations
+			if (!isFromActiveConversation && msg.sender_id !== currentUser) {
+				window.location.reload();
+			}
+		}
+
+		function connect() {
+			const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+			ws = new WebSocket(protocol + '//' + window.location.host + '/ws');
+
+			ws.onopen = function() {
+				console.log('WebSocket connected');
+				reconnectAttempts = 0;
+			};
+
+			ws.onmessage = function(event) {
+				try {
+					const data = JSON.parse(event.data);
+					handleMessage(data);
+				} catch (e) {
+					console.error('Failed to parse WebSocket message:', e);
+				}
+			};
+
+			ws.onclose = function() {
+				console.log('WebSocket disconnected');
+				if (reconnectAttempts < maxReconnectAttempts) {
+					reconnectAttempts++;
+					const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+					console.log('Reconnecting in', delay, 'ms...');
+					setTimeout(connect, delay);
+				}
+			};
+
+			ws.onerror = function(error) {
+				console.error('WebSocket error:', error);
+			};
+		}
+
+		connect();
+	})();
+}

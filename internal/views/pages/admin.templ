@@ -1,0 +1,279 @@
+package pages
+
+import (
+	"fmt"
+
+	"github.com/dukerupert/wantok/internal/components/badge"
+	"github.com/dukerupert/wantok/internal/components/button"
+	"github.com/dukerupert/wantok/internal/components/card"
+	"github.com/dukerupert/wantok/internal/components/checkbox"
+	"github.com/dukerupert/wantok/internal/components/dialog"
+	"github.com/dukerupert/wantok/internal/components/input"
+	"github.com/dukerupert/wantok/internal/components/label"
+	"github.com/dukerupert/wantok/internal/components/table"
+	"github.com/dukerupert/wantok/internal/views/layouts"
+)
+
+// AdminUser represents a user in the admin panel.
+type AdminUser struct {
+	ID          int64
+	Username    string
+	DisplayName string
+	IsAdmin     int64
+}
+
+// AdminPageData holds data for the admin template.
+type AdminPageData struct {
+	CurrentUserID int64
+	Users         []AdminUser
+	Error         string
+	Success       string
+}
+
+templ Admin(data AdminPageData) {
+	@layouts.Base("Admin - Wantok") {
+		<div class="min-h-screen p-6 bg-muted/30">
+			<div class="max-w-4xl mx-auto">
+				<!-- Header -->
+				<div class="flex justify-between items-center mb-6">
+					<h1 class="text-2xl font-bold">User Management</h1>
+					<div class="flex gap-2">
+						@button.Button(button.Props{
+							Variant: button.VariantGhost,
+							Href:    "/",
+						}) {
+							Back to Home
+						}
+						<form action="/auth/logout" method="POST" class="inline">
+							@button.Button(button.Props{
+								Type:    button.TypeSubmit,
+								Variant: button.VariantSecondary,
+							}) {
+								Logout
+							}
+						</form>
+					</div>
+				</div>
+				if data.Error != "" {
+					<div class="mb-4 p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-md text-sm">
+						{ data.Error }
+					</div>
+				}
+				if data.Success != "" {
+					<div class="mb-4 p-3 bg-primary/10 border border-primary/20 text-primary rounded-md text-sm">
+						{ data.Success }
+					</div>
+				}
+				<!-- Create User Form -->
+				@card.Card(card.Props{Class: "mb-6"}) {
+					@card.Header() {
+						@card.Title() {
+							Create New User
+						}
+					}
+					@card.Content() {
+						<form action="/admin/users" method="POST" class="space-y-4">
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+								<div class="space-y-2">
+									@label.Label(label.Props{For: "username"}) {
+										Username
+									}
+									@input.Input(input.Props{
+										ID:          "username",
+										Name:        "username",
+										Placeholder: "Enter username",
+										Attributes:  templ.Attributes{"required": true},
+									})
+								</div>
+								<div class="space-y-2">
+									@label.Label(label.Props{For: "display_name"}) {
+										Display Name
+									}
+									@input.Input(input.Props{
+										ID:          "display_name",
+										Name:        "display_name",
+										Placeholder: "Enter display name",
+										Attributes:  templ.Attributes{"required": true},
+									})
+								</div>
+							</div>
+							<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+								<div class="space-y-2">
+									@label.Label(label.Props{For: "password"}) {
+										Password
+									}
+									@input.Input(input.Props{
+										ID:          "password",
+										Name:        "password",
+										Type:        input.TypePassword,
+										Placeholder: "Enter password",
+										Attributes:  templ.Attributes{"required": true},
+									})
+								</div>
+								<div class="flex items-end pb-2">
+									@checkbox.Checkbox(checkbox.Props{
+										ID:   "is_admin",
+										Name: "is_admin",
+									}) {
+										Admin privileges
+									}
+								</div>
+							</div>
+							@button.Button(button.Props{
+								Type: button.TypeSubmit,
+							}) {
+								Create User
+							}
+						</form>
+					}
+				}
+				<!-- User List -->
+				@card.Card() {
+					@card.Header() {
+						@card.Title() {
+							Users
+						}
+					}
+					@card.Content(card.ContentProps{Class: "p-0"}) {
+						@table.Table() {
+							@table.Header() {
+								@table.Row() {
+									@table.Head() {
+										Username
+									}
+									@table.Head() {
+										Display Name
+									}
+									@table.Head() {
+										Role
+									}
+									@table.Head(table.HeadProps{Class: "text-right"}) {
+										Actions
+									}
+								}
+							}
+							@table.Body() {
+								for _, user := range data.Users {
+									@table.Row() {
+										@table.Cell() {
+											{ user.Username }
+										}
+										@table.Cell() {
+											{ user.DisplayName }
+										}
+										@table.Cell() {
+											if user.IsAdmin == 1 {
+												@badge.Badge(badge.Props{Variant: badge.VariantDefault}) {
+													Admin
+												}
+											} else {
+												@badge.Badge(badge.Props{Variant: badge.VariantSecondary}) {
+													User
+												}
+											}
+										}
+										@table.Cell(table.CellProps{Class: "text-right"}) {
+											<div class="flex justify-end gap-2">
+												@dialog.Dialog(dialog.Props{ID: fmt.Sprintf("edit-%d", user.ID)}) {
+													@dialog.Trigger() {
+														@button.Button(button.Props{
+															Variant: button.VariantGhost,
+															Size:    button.SizeSm,
+														}) {
+															Edit
+														}
+													}
+													@dialog.Content() {
+														@dialog.Header() {
+															@dialog.Title() {
+																Edit User
+															}
+															@dialog.Description() {
+																Update user details for { user.Username }
+															}
+														}
+														<form action={ templ.SafeURL(fmt.Sprintf("/admin/users/%d", user.ID)) } method="POST" class="space-y-4">
+															<input type="hidden" name="username" value={ user.Username }/>
+															<div class="space-y-2">
+																@label.Label(label.Props{For: fmt.Sprintf("edit-display-%d", user.ID)}) {
+																	Display Name
+																}
+																@input.Input(input.Props{
+																	ID:    fmt.Sprintf("edit-display-%d", user.ID),
+																	Name:  "display_name",
+																	Value: user.DisplayName,
+																})
+															</div>
+															<div class="space-y-2">
+																@label.Label(label.Props{For: fmt.Sprintf("edit-password-%d", user.ID)}) {
+																	New Password (optional)
+																}
+																@input.Input(input.Props{
+																	ID:          fmt.Sprintf("edit-password-%d", user.ID),
+																	Name:        "password",
+																	Type:        input.TypePassword,
+																	Placeholder: "Leave blank to keep current",
+																})
+															</div>
+															<div class="flex items-center gap-2">
+																if user.IsAdmin == 1 {
+																	@checkbox.Checkbox(checkbox.Props{
+																		ID:      fmt.Sprintf("edit-admin-%d", user.ID),
+																		Name:    "is_admin",
+																		Checked: true,
+																	}) {
+																		Admin privileges
+																	}
+																} else {
+																	@checkbox.Checkbox(checkbox.Props{
+																		ID:   fmt.Sprintf("edit-admin-%d", user.ID),
+																		Name: "is_admin",
+																	}) {
+																		Admin privileges
+																	}
+																}
+															</div>
+															@dialog.Footer() {
+																@dialog.Close() {
+																	@button.Button(button.Props{
+																		Variant: button.VariantSecondary,
+																	}) {
+																		Cancel
+																	}
+																}
+																@button.Button(button.Props{
+																	Type: button.TypeSubmit,
+																}) {
+																	Save Changes
+																}
+															}
+														</form>
+													}
+												}
+												if user.ID != data.CurrentUserID {
+													<form action={ templ.SafeURL(fmt.Sprintf("/admin/users/%d/delete", user.ID)) } method="POST" class="inline" onsubmit="return confirm('Delete this user?')">
+														@button.Button(button.Props{
+															Type:    button.TypeSubmit,
+															Variant: button.VariantGhost,
+															Size:    button.SizeSm,
+															Class:   "text-destructive hover:text-destructive",
+														}) {
+															Delete
+														}
+													</form>
+												}
+											</div>
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			</div>
+		</div>
+		@dialog.Script()
+		@input.Script()
+		@checkbox.Script()
+	}
+}

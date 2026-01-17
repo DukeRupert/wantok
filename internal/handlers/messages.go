@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"encoding/json"
-	"html"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -11,20 +10,13 @@ import (
 
 	"github.com/dukerupert/wantok/internal/auth"
 	"github.com/dukerupert/wantok/internal/realtime"
-	"github.com/dukerupert/wantok/internal/render"
 	"github.com/dukerupert/wantok/internal/store"
 	"github.com/dukerupert/wantok/internal/validate"
+	"github.com/dukerupert/wantok/internal/views/pages"
+	"github.com/dukerupert/wantok/internal/views/partials"
 )
 
-// ConversationListItem represents a conversation in the sidebar.
-type ConversationListItem struct {
-	UserID          int64  `json:"user_id"`
-	DisplayName     string `json:"display_name"`
-	LastMessage     string `json:"last_message"`
-	LastMessageTime string `json:"last_message_time"`
-}
-
-// MessageItem represents a single message in a conversation.
+// MessageItem represents a single message for JSON API responses.
 type MessageItem struct {
 	ID         int64  `json:"id"`
 	Content    string `json:"content"`
@@ -34,28 +26,17 @@ type MessageItem struct {
 	IsSent     bool   `json:"is_sent"`
 }
 
-// ChatPageData holds data for the chat template.
-type ChatPageData struct {
-	Conversations   []ConversationListItem
-	ActiveUserID    int64
-	ActiveUserName  string
-	Messages        []MessageItem
-	CurrentUserID   int64
-	CurrentUserName string
-	IsAdmin         bool
-}
-
 // HandleChatPage renders the main chat interface.
-func HandleChatPage(queries *store.Queries, renderer *render.Renderer) http.HandlerFunc {
+func HandleChatPage(queries *store.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		user := auth.GetUser(ctx)
 
 		// Fetch conversations list
-		conversations := getConversationsList(queries, ctx, user.ID)
+		conversations := getConversationsListForPage(queries, ctx, user.ID)
 
 		// Check for ?user= query param to load specific conversation
-		data := ChatPageData{
+		data := pages.ChatPageData{
 			Conversations:   conversations,
 			CurrentUserID:   user.ID,
 			CurrentUserName: user.DisplayName,
@@ -82,9 +63,9 @@ func HandleChatPage(queries *store.Queries, renderer *render.Renderer) http.Hand
 						Offset:        0,
 					})
 					if err == nil {
-						data.Messages = make([]MessageItem, len(msgs))
+						data.Messages = make([]pages.MessageItem, len(msgs))
 						for i, m := range msgs {
-							data.Messages[i] = MessageItem{
+							data.Messages[i] = pages.MessageItem{
 								ID:         m.ID,
 								Content:    m.Content,
 								SenderID:   m.SenderID,
@@ -98,7 +79,7 @@ func HandleChatPage(queries *store.Queries, renderer *render.Renderer) http.Hand
 			}
 		}
 
-		if err := renderer.Render(w, "chat", data); err != nil {
+		if err := pages.Chat(data).Render(ctx, w); err != nil {
 			slog.Error("failed to render chat page", "type", "request", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}
@@ -264,19 +245,11 @@ func HandleSendMessage(queries *store.Queries, hub *realtime.Hub) http.HandlerFu
 		}
 		hub.SendToUser(user.ID, wsMsg)
 
-		// Check if HTMX request - return HTML fragment
+		// Check if HTMX request - return HTML fragment using templ
 		if r.Header.Get("HX-Request") == "true" {
 			w.Header().Set("Content-Type", "text/html")
 			w.WriteHeader(http.StatusCreated)
-			// Return message HTML that matches the template structure (escape content for XSS)
-			escapedContent := html.EscapeString(msg.Content)
-			htmlResp := `<div class="flex justify-end" data-message-id="` + strconv.FormatInt(msg.ID, 10) + `">
-				<div class="max-w-xs lg:max-w-md px-4 py-2 rounded-lg bg-emerald-600 text-white">
-					<p>` + escapedContent + `</p>
-					<p class="text-xs mt-1 text-emerald-100">` + msg.CreatedAt + `</p>
-				</div>
-			</div>`
-			w.Write([]byte(htmlResp))
+			partials.Message(msg.ID, msg.Content, msg.CreatedAt, true).Render(ctx, w)
 			return
 		}
 
@@ -300,7 +273,60 @@ func HandleSendMessage(queries *store.Queries, hub *realtime.Hub) http.HandlerFu
 	}
 }
 
-// getConversationsList fetches and deduplicates conversations for a user.
+// ConversationListItem represents a conversation for JSON API responses.
+type ConversationListItem struct {
+	UserID          int64  `json:"user_id"`
+	DisplayName     string `json:"display_name"`
+	LastMessage     string `json:"last_message"`
+	LastMessageTime string `json:"last_message_time"`
+}
+
+// getConversationsListForPage fetches conversations for templ page rendering.
+func getConversationsListForPage(queries *store.Queries, ctx context.Context, userID int64) []pages.ConversationListItem {
+	rows, err := queries.GetRecentMessagePerUser(ctx, store.GetRecentMessagePerUserParams{
+		SenderID:    userID,
+		SenderID_2:  userID,
+		RecipientID: userID,
+	})
+	if err != nil {
+		slog.Error("failed to get conversations", "type", "request", "error", err)
+		return []pages.ConversationListItem{}
+	}
+
+	// Deduplicate by other user ID, keeping most recent (already sorted by created_at DESC)
+	seen := make(map[int64]bool)
+	var conversations []pages.ConversationListItem
+
+	for _, row := range rows {
+		// Determine the other user's ID
+		otherUserID := row.RecipientID
+		if row.SenderID != userID {
+			otherUserID = row.SenderID
+		}
+
+		if seen[otherUserID] {
+			continue
+		}
+		seen[otherUserID] = true
+
+		// Truncate message preview
+		preview := row.Content
+		if len(preview) > 50 {
+			preview = preview[:47] + "..."
+		}
+
+		conversations = append(conversations, pages.ConversationListItem{
+			UserID:          otherUserID,
+			DisplayName:     row.OtherUserDisplayName,
+			LastMessage:     preview,
+			LastMessageTime: row.CreatedAt,
+		})
+	}
+
+	return conversations
+}
+
+// getConversationsList fetches conversations for JSON API responses.
 func getConversationsList(queries *store.Queries, ctx context.Context, userID int64) []ConversationListItem {
 	rows, err := queries.GetRecentMessagePerUser(ctx, store.GetRecentMessagePerUserParams{
 		SenderID:    userID,

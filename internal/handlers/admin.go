@@ -7,21 +7,13 @@ import (
 	"strconv"
 
 	"github.com/dukerupert/wantok/internal/auth"
-	"github.com/dukerupert/wantok/internal/render"
 	"github.com/dukerupert/wantok/internal/store"
 	"github.com/dukerupert/wantok/internal/validate"
+	"github.com/dukerupert/wantok/internal/views/pages"
 )
 
-// AdminPageData holds data for the admin template.
-type AdminPageData struct {
-	User    *auth.User
-	Users   []store.User
-	Error   string
-	Success string
-}
-
 // HandleAdminPage renders the admin user management page.
-func HandleAdminPage(queries *store.Queries, renderer *render.Renderer) http.HandlerFunc {
+func HandleAdminPage(queries *store.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		user := auth.GetUser(ctx)
@@ -33,12 +25,12 @@ func HandleAdminPage(queries *store.Queries, renderer *render.Renderer) http.Han
 			return
 		}
 
-		data := AdminPageData{
-			User:  user,
-			Users: users,
+		data := pages.AdminPageData{
+			CurrentUserID: user.ID,
+			Users:         convertUsersToAdminUsers(users),
 		}
 
-		if err := renderer.Render(w, "admin", data); err != nil {
+		if err := pages.Admin(data).Render(ctx, w); err != nil {
 			slog.Error("failed to render admin page", "type", "request", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}
@@ -46,7 +38,7 @@ func HandleAdminPage(queries *store.Queries, renderer *render.Renderer) http.Han
 }
 
 // HandleCreateUser processes the create user form.
-func HandleCreateUser(queries *store.Queries, renderer *render.Renderer) http.HandlerFunc {
+func HandleCreateUser(queries *store.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		user := auth.GetUser(ctx)
@@ -64,15 +56,15 @@ func HandleCreateUser(queries *store.Queries, renderer *render.Renderer) http.Ha
 
 		// Validate input
 		if err := validate.Username(username); err != nil {
-			renderAdminError(w, queries, renderer, ctx, user, err.Error())
+			renderAdminError(w, queries, ctx, user.ID, err.Error())
 			return
 		}
 		if err := validate.DisplayName(displayName); err != nil {
-			renderAdminError(w, queries, renderer, ctx, user, err.Error())
+			renderAdminError(w, queries, ctx, user.ID, err.Error())
 			return
 		}
 		if err := validate.Password(password); err != nil {
-			renderAdminError(w, queries, renderer, ctx, user, err.Error())
+			renderAdminError(w, queries, ctx, user.ID, err.Error())
 			return
 		}
 
@@ -80,7 +72,7 @@ func HandleCreateUser(queries *store.Queries, renderer *render.Renderer) http.Ha
 		hash, err := auth.HashPassword(password)
 		if err != nil {
 			slog.Error("failed to hash password", "type", "request", "error", err)
-			renderAdminError(w, queries, renderer, ctx, user, "Failed to create user")
+			renderAdminError(w, queries, ctx, user.ID, "Failed to create user")
 			return
 		}
 
@@ -98,7 +90,7 @@ func HandleCreateUser(queries *store.Queries, renderer *render.Renderer) http.Ha
 		})
 		if err != nil {
 			slog.Error("failed to create user", "type", "request", "error", err)
-			renderAdminError(w, queries, renderer, ctx, user, "Failed to create user (username may already exist)")
+			renderAdminError(w, queries, ctx, user.ID, "Failed to create user (username may already exist)")
 			return
 		}
 
@@ -108,7 +100,7 @@ func HandleCreateUser(queries *store.Queries, renderer *render.Renderer) http.Ha
 }
 
 // HandleUpdateUser processes the update user form.
-func HandleUpdateUser(queries *store.Queries, renderer *render.Renderer) http.HandlerFunc {
+func HandleUpdateUser(queries *store.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		user := auth.GetUser(ctx)
@@ -132,13 +124,13 @@ func HandleUpdateUser(queries *store.Queries, renderer *render.Renderer) http.Ha
 
 		// Validate input
 		if err := validate.DisplayName(displayName); err != nil {
-			renderAdminError(w, queries, renderer, ctx, user, err.Error())
+			renderAdminError(w, queries, ctx, user.ID, err.Error())
 			return
 		}
 		// Password is optional for updates, but validate if provided
 		if password != "" {
 			if err := validate.Password(password); err != nil {
-				renderAdminError(w, queries, renderer, ctx, user, err.Error())
+				renderAdminError(w, queries, ctx, user.ID, err.Error())
 				return
 			}
 		}
@@ -147,7 +139,7 @@ func HandleUpdateUser(queries *store.Queries, renderer *render.Renderer) http.Ha
 		existingUser, err := queries.GetUserByID(ctx, userID)
 		if err != nil {
 			slog.Error("failed to get user", "type", "request", "error", err)
-			renderAdminError(w, queries, renderer, ctx, user, "User not found")
+			renderAdminError(w, queries, ctx, user.ID, "User not found")
 			return
 		}
 
@@ -157,7 +149,7 @@ func HandleUpdateUser(queries *store.Queries, renderer *render.Renderer) http.Ha
 			passwordHash, err = auth.HashPassword(password)
 			if err != nil {
 				slog.Error("failed to hash password", "type", "request", "error", err)
-				renderAdminError(w, queries, renderer, ctx, user, "Failed to update user")
+				renderAdminError(w, queries, ctx, user.ID, "Failed to update user")
 				return
 			}
 		}
@@ -175,7 +167,7 @@ func HandleUpdateUser(queries *store.Queries, renderer *render.Renderer) http.Ha
 		})
 		if err != nil {
 			slog.Error("failed to update user", "type", "request", "error", err)
-			renderAdminError(w, queries, renderer, ctx, user, "Failed to update user")
+			renderAdminError(w, queries, ctx, user.ID, "Failed to update user")
 			return
 		}
 
@@ -216,15 +208,29 @@ func HandleDeleteUser(queries *store.Queries) http.HandlerFunc {
 }
 
 // renderAdminError renders the admin page with an error message.
-func renderAdminError(w http.ResponseWriter, queries *store.Queries, renderer *render.Renderer, ctx context.Context, user *auth.User, errMsg string) {
+func renderAdminError(w http.ResponseWriter, queries *store.Queries, ctx context.Context, currentUserID int64, errMsg string) {
 	users, _ := queries.ListUsers(ctx)
 
-	data := AdminPageData{
-		User:  user,
-		Users: users,
-		Error: errMsg,
+	data := pages.AdminPageData{
+		CurrentUserID: currentUserID,
+		Users:         convertUsersToAdminUsers(users),
+		Error:         errMsg,
 	}
 
 	w.WriteHeader(http.StatusBadRequest)
-	renderer.Render(w, "admin", data)
+	pages.Admin(data).Render(ctx, w)
+}
+
+// convertUsersToAdminUsers converts store.User slice to pages.AdminUser slice.
+func convertUsersToAdminUsers(users []store.User) []pages.AdminUser {
+	result := make([]pages.AdminUser, len(users))
+	for i, u := range users {
+		result[i] = pages.AdminUser{
+			ID:          u.ID,
+			Username:    u.Username,
+			DisplayName: u.DisplayName,
+			IsAdmin:     u.IsAdmin,
+		}
+	}
+	return result
 }

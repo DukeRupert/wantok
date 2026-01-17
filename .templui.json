@@ -1,0 +1,7 @@
+{
+  "componentsDir": "internal/components",
+  "utilsDir": "internal/components/utils",
+  "moduleName": "github.com/dukerupert/wantok",
+  "jsDir": "assets/js",
+  "jsPublicPath": "/assets/js"
+}

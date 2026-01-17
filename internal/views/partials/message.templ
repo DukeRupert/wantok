@@ -1,0 +1,16 @@
+package partials
+
+import (
+	"strconv"
+)
+
+// Message renders a single chat message bubble.
+// Used for both initial page render and HTMX responses.
+templ Message(id int64, content, createdAt string, isSent bool) {
+	<div class={ "flex", templ.KV("justify-end", isSent), templ.KV("justify-start", !isSent) } data-message-id={ strconv.FormatInt(id, 10) }>
+		<div class={ "max-w-[85%] sm:max-w-xs lg:max-w-md px-4 py-2 rounded-lg", templ.KV("bg-primary text-primary-foreground", isSent), templ.KV("bg-muted", !isSent) }>
+			<p class="break-words">{ content }</p>
+			<p class={ "text-xs mt-1", templ.KV("text-primary-foreground/70", isSent), templ.KV("text-muted-foreground", !isSent) }>{ createdAt }</p>
+		</div>
+	</div>
+}

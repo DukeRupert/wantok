@@ -5,8 +5,8 @@ import (
 	"net/http"
 
 	"github.com/dukerupert/wantok/internal/auth"
-	"github.com/dukerupert/wantok/internal/render"
 	"github.com/dukerupert/wantok/internal/store"
+	"github.com/dukerupert/wantok/internal/views/pages"
 )
 
 const (
@@ -19,14 +19,9 @@ const (
 // Set to false for development over HTTP.
 var SecureCookies = true
 
-// LoginPageData holds data for the login template.
-type LoginPageData struct {
-	Error string
-}
-
 // HandleLoginPage renders the login form.
 // Redirects to / if user is already authenticated.
-func HandleLoginPage(queries *store.Queries, renderer *render.Renderer) http.HandlerFunc {
+func HandleLoginPage(queries *store.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		// Check if user is already authenticated
@@ -37,7 +32,7 @@ func HandleLoginPage(queries *store.Queries, renderer *render.Renderer) http.Han
 			}
 		}
 		// Render login template
-		if err := renderer.Render(w, "login", LoginPageData{}); err != nil {
+		if err := pages.Login(pages.LoginPageData{}).Render(ctx, w); err != nil {
 			slog.Error("failed to render login page", "type", "request", "error", err)
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}
@@ -47,7 +42,7 @@ func HandleLoginPage(queries *store.Queries, renderer *render.Renderer) http.Han
 // HandleLogin processes the login form submission.
 // On success: creates session, sets cookie, redirects to /
 // On failure: re-renders login page with error
-func HandleLogin(queries *store.Queries, renderer *render.Renderer) http.HandlerFunc {
+func HandleLogin(queries *store.Queries) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		// Parse form to get username and password
@@ -62,7 +57,7 @@ func HandleLogin(queries *store.Queries, renderer *render.Renderer) http.Handler
 		// Basic length validation to prevent abuse
 		if len(username) > maxInputLength || len(password) > maxInputLength {
 			w.WriteHeader(http.StatusBadRequest)
-			renderer.Render(w, "login", LoginPageData{Error: "Invalid username or password"})
+			pages.Login(pages.LoginPageData{Error: "Invalid username or password"}).Render(ctx, w)
 			return
 		}
 
@@ -72,7 +67,7 @@ func HandleLogin(queries *store.Queries, renderer *render.Renderer) http.Handler
 		if err != nil {
 			slog.Error("GetUserByUsername() error", "type", "request", "error", err)
 			w.WriteHeader(http.StatusUnauthorized)
-			renderer.Render(w, "login", LoginPageData{Error: "Invalid username or password"})
+			pages.Login(pages.LoginPageData{Error: "Invalid username or password"}).Render(ctx, w)
 			return
 		}
 		// Check password
@@ -81,7 +76,7 @@ func HandleLogin(queries *store.Queries, renderer *render.Renderer) http.Handler
 		if !isValid {
 			slog.Info("Invalid password", "type", "request")
 			w.WriteHeader(http.StatusUnauthorized)
-			renderer.Render(w, "login", LoginPageData{Error: "Invalid username or password"})
+			pages.Login(pages.LoginPageData{Error: "Invalid username or password"}).Render(ctx, w)
 			return
 		}
 		// Create session
