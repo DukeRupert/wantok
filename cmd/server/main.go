@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
@@ -176,17 +177,28 @@ func createAdmin(cfg AppConfig) error {
 		return fmt.Errorf("no display name received: %w", err)
 	}
 
+	emailStr, err := promptString("email (optional): ")
+	if err != nil {
+		return fmt.Errorf("no email input received: %w", err)
+	}
+
 	hash, err := auth.HashPassword(password)
 	if err != nil {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
+	var email sql.NullString
+	if emailStr != "" {
+		email = sql.NullString{String: emailStr, Valid: true}
+	}
+
 	ctx := context.Background()
-	_, err = queries.CreateUser(ctx, store.CreateUserParams{
-		Username: username,
-		DisplayName: displayName,
+	_, err = queries.CreateUserWithEmail(ctx, store.CreateUserWithEmailParams{
+		Username:     username,
+		DisplayName:  displayName,
 		PasswordHash: hash,
-		IsAdmin: 1,
+		Email:        email,
+		IsAdmin:      1,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create admin user: %w", err)
