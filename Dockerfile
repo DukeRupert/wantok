@@ -34,6 +34,9 @@ RUN mkdir -p /app/data && chown -R wantok:wantok /app
 # Copy binary from builder
 COPY --from=builder /app/wantok /app/wantok
 
+# Copy static assets
+COPY --from=builder /app/assets /app/assets
+
 # Switch to non-root user
 USER wantok
 
