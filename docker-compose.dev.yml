@@ -1,0 +1,39 @@
+# Development docker-compose with Mailpit for email testing
+# Usage: docker compose -f docker-compose.dev.yml up
+
+services:
+  wantok:
+    build: .
+    container_name: wantok-dev
+    ports:
+      - "8080:8080"
+    volumes:
+      - wantok-data:/app/data
+    environment:
+      - DATABASE_PATH=/app/data/wantok.db
+      - HOST=0.0.0.0
+      - PORT=8080
+      - SESSION_SECRET=dev-secret-change-in-production
+      - SECURE_COOKIES=false
+      - BASE_URL=http://localhost:8080
+      # SMTP configuration pointing to Mailpit
+      - EMAIL_PROVIDER=smtp
+      - EMAIL_FROM=noreply@wantok.local
+      - SMTP_HOST=mailpit
+      - SMTP_PORT=1025
+      - SMTP_TLS=false
+    depends_on:
+      - mailpit
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: wantok-mailpit
+    ports:
+      - "8025:8025"   # Web UI
+      - "1025:1025"   # SMTP
+    environment:
+      - MP_SMTP_AUTH_ACCEPT_ANY=true
+      - MP_SMTP_AUTH_ALLOW_INSECURE=true
+
+volumes:
+  wantok-data:

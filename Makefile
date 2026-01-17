@@ -1,4 +1,4 @@
-.PHONY: run build create-admin sqlc migrate dev docker-build docker-up docker-down docker-create-admin docker-logs
+.PHONY: run build create-admin sqlc migrate dev docker-build docker-up docker-down docker-create-admin docker-logs dev-up dev-down dev-create-admin dev-logs dev-mailpit
 
 # Run the server (development)
 run:
@@ -45,3 +45,25 @@ docker-create-admin:
 # View logs
 docker-logs:
 	docker compose logs -f wantok
+
+# --- Development with Mailpit ---
+
+# Start dev environment with Mailpit for email testing
+dev-up:
+	docker compose -f docker-compose.dev.yml up --build -d
+
+# Stop dev environment
+dev-down:
+	docker compose -f docker-compose.dev.yml down
+
+# Create admin user in dev environment
+dev-create-admin:
+	docker compose -f docker-compose.dev.yml exec -it wantok /app/wantok --create-admin
+
+# View dev logs
+dev-logs:
+	docker compose -f docker-compose.dev.yml logs -f wantok
+
+# Open Mailpit web UI (macOS)
+dev-mailpit:
+	@echo "Mailpit UI: http://localhost:8025"
