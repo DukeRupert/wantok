@@ -1,0 +1,23 @@
+package partials
+
+import "fmt"
+
+type UserListItem struct {
+	ID          int64
+	DisplayName string
+}
+
+templ UserList(users []UserListItem) {
+	if len(users) == 0 {
+		<p class="text-muted-foreground text-center py-4">No other users yet</p>
+	} else {
+		for _, user := range users {
+			<a
+				href={ templ.SafeURL(fmt.Sprintf("/?user=%d", user.ID)) }
+				class="block px-2 py-3 rounded-md hover:bg-accent/50 transition-colors"
+			>
+				<div class="font-medium">{ user.DisplayName }</div>
+			</a>
+		}
+	}
+}

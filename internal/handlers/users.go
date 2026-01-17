@@ -1,20 +1,13 @@
 package handlers
 
 import (
-	"encoding/json"
 	"log/slog"
 	"net/http"
 
 	"github.com/dukerupert/wantok/internal/auth"
 	"github.com/dukerupert/wantok/internal/store"
+	"github.com/dukerupert/wantok/internal/views/partials"
 )
-
-// UserResponse is the JSON response for a user.
-type UserResponse struct {
-	ID          int64  `json:"id"`
-	Username    string `json:"username"`
-	DisplayName string `json:"display_name"`
-}
 
 // HandleListUsers returns all users except the current user.
 // Used for starting new conversations.
@@ -30,19 +23,18 @@ func HandleListUsers(queries *store.Queries) http.HandlerFunc {
 			return
 		}
 
-		// Convert to response format (exclude sensitive fields)
-		response := make([]UserResponse, len(users))
+		// Convert to template format
+		userList := make([]partials.UserListItem, len(users))
 		for i, u := range users {
-			response[i] = UserResponse{
+			userList[i] = partials.UserListItem{
 				ID:          u.ID,
-				Username:    u.Username,
 				DisplayName: u.DisplayName,
 			}
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(response); err != nil {
-			slog.Error("failed to encode users", "type", "request", "error", err)
+		if err := partials.UserList(userList).Render(ctx, w); err != nil {
+			slog.Error("failed to render user list", "type", "request", "error", err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}
 	}
 }
