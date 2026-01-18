@@ -1,7 +1,6 @@
 # Wantok Caddy reverse proxy configuration
-# Replace wantok.example.com with your actual domain
 
-wantok.example.com {
+chat.angmar.dev {
     # Reverse proxy to Wantok server
     reverse_proxy localhost:8080
 
